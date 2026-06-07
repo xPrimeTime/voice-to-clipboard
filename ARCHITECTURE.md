@@ -474,10 +474,12 @@ bundle scripts allowlist `libonnxruntime` so it ships alongside the CT2 libs.
 
 ### Single-Instance IPC
 
-The app listens on a per-user Unix socket
-(`$XDG_RUNTIME_DIR/voice-to-clipboard/ipc.sock`). Re-launching with a control
-flag dials the socket and sends a command to the running instance instead of
-opening a second window:
+The app listens on a per-user IPC endpoint (the cgo-free `internal/ipc`
+package): a Unix domain socket
+(`$XDG_RUNTIME_DIR/voice-to-clipboard/ipc.sock`) on Linux/macOS, or a named
+pipe (`\\.\pipe\voice-to-clipboard-<user>`) on Windows. Re-launching with a
+control flag dials the endpoint and sends a command to the running instance
+instead of opening a second window:
 
 - `--toggle`: start/stop recording
 - `--quit`: cleanly exit the running instance
