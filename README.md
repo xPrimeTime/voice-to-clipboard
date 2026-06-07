@@ -120,7 +120,7 @@ bind = SUPER SHIFT, S,  exec, /path/to/voice-to-clipboard --show
 ### System Tray
 
 The tray icon is a **status indicator** plus a best-effort menu:
-- **Left-click** the icon: show the window (works on most hosts).
+- **Left-click** the icon: start/stop recording.
 - **Right-click**: menu with Toggle Recording, Auto-hide, Keep hidden, Model
   selection, Quit.
 
@@ -128,7 +128,7 @@ The tray icon is a **status indicator** plus a best-effort menu:
 > show the icon but **don't deliver menu clicks**, others (waybar) need a `tray`
 > module, and GNOME needs an extension. So don't rely on the tray menu — use the
 > IPC commands above (bound to keys) as the primary control. The icon's
-> left-click (show window) and the in-app shortcuts always work.
+> left-click (toggle recording) and the in-app shortcuts always work.
 
 ## Configuration
 
@@ -249,18 +249,24 @@ New downloads include `tokenizer.json` automatically.
 
 ### Tray menu / Quit does nothing (Wayland)
 Some Wayland panels don't deliver tray menu clicks to the app. Quit reliably
-with `/path/to/voice-to-clipboard --quit`, left-click the icon to show the
-window, or use the IPC keybinds. See [System Tray](#system-tray).
+with `/path/to/voice-to-clipboard --quit` or the IPC keybinds. See
+[System Tray](#system-tray).
 
 ### Hyprland: window fills the whole screen (fullscreen overlay)
 The 120×40 window must **float**; a tiled window fills the workspace on
 Hyprland. The app forces floating via `hyprctl dispatch setfloating` when it
 shows the window, but for guaranteed behavior from the moment it launches, add
-a float rule to `~/.config/hypr/hyprland.conf`:
+a float rule to `~/.config/hypr/hyprland.conf` (syntax differs by version):
 
 ```bash
-windowrulev2 = float, class:^(voice-to-clipboard)$
+# Hyprland 0.4x+ (unified windowrule with match:)
+windowrule = float on, match:class ^(voice-to-clipboard)$
+
+# Older Hyprland (windowrulev2)
+# windowrulev2 = float, class:^(voice-to-clipboard)$
 ```
+
+Then `hyprctl reload`.
 
 (Optionally `size 120 40` and a `move` rule to pin its position.)
 

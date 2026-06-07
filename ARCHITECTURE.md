@@ -488,11 +488,12 @@ instead of opening a second window:
 This is a deliberately tray-independent control plane (bind to compositor keys):
 tray hosts vary too much to rely on (some don't forward menu clicks, some need a
 module/extension), and Wayland has no global hotkeys. The tray icon's left-click
-(SNI Activate, `systray.SetOnTapped`) also shows the window as a fallback gesture.
+(SNI Activate, `systray.SetOnTapped`) toggles recording as a fallback gesture.
 
 Window management on Hyprland forces floating via `hyprctl dispatch setfloating`
 when showing the window; a blind `togglefloating` would tile an already-floating
-window, which fills the screen (the fullscreen-overlay bug).
+window, which fills the screen (the fullscreen-overlay bug). A float windowrule
+(`float on, match:class ^(voice-to-clipboard)$` on Hyprland 0.4x+) guarantees it.
 
 ---
 
