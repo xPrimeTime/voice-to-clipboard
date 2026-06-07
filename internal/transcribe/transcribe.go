@@ -63,7 +63,7 @@ func (w *Whisper) LoadModel() error {
 	// Using 'default' allows CTranslate2 to handle auto-conversion from float16 models
 	modelConfig := whisper.ModelConfig{
 		Device:       "cpu",
-		ComputeType:  "default", // Let CTranslate2 handle optimal conversion
+		ComputeType:  "default", // int8 is unsupported on this CPU/CT2 build; default -> float32
 		InterThreads: 1,         // Batch parallelization (1 for single-file)
 		IntraThreads: 0,         // Auto-detect threads (uses OMP_NUM_THREADS if set)
 	}

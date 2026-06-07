@@ -96,17 +96,16 @@ func removeStaleSocket(socketPath string) error {
 	return nil
 }
 
-// tryToggleExistingInstance attempts to send toggle command to running instance
-func tryToggleExistingInstance() bool {
+// sendCommandToExistingInstance sends a single IPC command to a running instance
+// and waits for its acknowledgment. Returns false if no instance is reachable.
+func sendCommandToExistingInstance(command string) bool {
 	conn, err := net.Dial("unix", getSocketPath())
 	if err != nil {
 		return false
 	}
 	defer conn.Close()
 
-	// Send toggle command
-	_, err = conn.Write([]byte("toggle\n"))
-	if err != nil {
+	if _, err := conn.Write([]byte(command + "\n")); err != nil {
 		return false
 	}
 
@@ -117,7 +116,6 @@ func tryToggleExistingInstance() bool {
 		return false
 	}
 
-	fmt.Println("Sent toggle command to running instance")
 	return true
 }
 
@@ -186,6 +184,12 @@ func (a *App) handleIPCConnection(conn net.Conn) {
 		logger.Info("Received toggle command via IPC")
 		a.toggleRecording()
 		conn.Write([]byte("ok\n"))
+	case "quit":
+		logger.Info("Received quit command via IPC")
+		// Acknowledge before exiting so the client's Read succeeds. The write
+		// reaches the peer's socket buffer before quit() calls os.Exit.
+		conn.Write([]byte("ok\n"))
+		a.quit("ipc")
 	default:
 		conn.Write([]byte("unknown\n"))
 	}
@@ -194,11 +198,26 @@ func (a *App) handleIPCConnection(conn net.Conn) {
 func main() {
 	// Parse command-line flags
 	toggleFlag := flag.Bool("toggle", false, "Toggle recording in existing instance")
+	quitFlag := flag.Bool("quit", false, "Quit a running instance")
 	flag.Parse()
 
 	// If --toggle flag is set, try to toggle existing instance
 	if *toggleFlag {
-		if tryToggleExistingInstance() {
+		if sendCommandToExistingInstance("toggle") {
+			fmt.Println("Sent toggle command to running instance")
+			os.Exit(0)
+		} else {
+			fmt.Println("No running instance found")
+			os.Exit(1)
+		}
+	}
+
+	// If --quit flag is set, ask a running instance to exit. This is a reliable
+	// way to close the app when the tray menu's Quit is unavailable (e.g. some
+	// Wayland panels don't deliver tray menu clicks).
+	if *quitFlag {
+		if sendCommandToExistingInstance("quit") {
+			fmt.Println("Sent quit command to running instance")
 			os.Exit(0)
 		} else {
 			fmt.Println("No running instance found")
@@ -223,6 +242,11 @@ func main() {
 	defer logger.Close()
 
 	logger.Info("App starting", "model", cfg.Model)
+
+	// Pin CPU inference to physical cores (unless OMP_NUM_THREADS is set) so the
+	// float32 Whisper encoder doesn't oversubscribe SMT siblings. Must run before
+	// the first transcription loads the model.
+	transcribe.ConfigureCPUThreads()
 
 	// Materialize the embedded Silero VAD model so the transcription library can
 	// load it (onnxruntime requires a real file path). Non-fatal: the library
