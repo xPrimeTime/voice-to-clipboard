@@ -77,8 +77,31 @@ func (m *ModelManager) DownloadModel(modelName string, onProgress ProgressCallba
 	downloadFiles := append([]string{}, config.RequiredModelFiles...)
 	downloadFiles = append(downloadFiles, "vocabulary.json")
 
-	totalFiles := len(downloadFiles)
-	for i, fileName := range downloadFiles {
+	// Byte-weighted progress: model.bin is ~99% of the bytes, so counting files
+	// equally makes the bar lurch. Accumulate downloaded bytes against the
+	// model's approximate total size instead, throttled to ~10 updates/sec.
+	var downloaded int64
+	lastUpdate := time.Now()
+	report := func(force bool) {
+		if onProgress == nil || modelInfo.Size <= 0 {
+			return
+		}
+		if !force && time.Since(lastUpdate) < 100*time.Millisecond {
+			return
+		}
+		progress := float64(downloaded) / float64(modelInfo.Size)
+		if progress > 1.0 {
+			progress = 1.0
+		}
+		onProgress(progress)
+		lastUpdate = time.Now()
+	}
+	onDelta := func(n int) {
+		downloaded += int64(n)
+		report(false)
+	}
+
+	for _, fileName := range downloadFiles {
 		// Build URL: https://huggingface.co/{repo}/resolve/main/{file}
 		fileURL := fmt.Sprintf("%s/resolve/main/%s", modelInfo.URL, fileName)
 
@@ -86,41 +109,39 @@ func (m *ModelManager) DownloadModel(modelName string, onProgress ProgressCallba
 		destPath := filepath.Join(modelPath, fileName)
 		logger.Info("Downloading file", "file", fileName, "url", fileURL)
 
-		if err := m.downloadFile(fileURL, destPath, 0, nil); err != nil {
+		if err := m.downloadFile(fileURL, destPath, onDelta); err != nil {
 			// vocabulary.json might not exist (some models use vocabulary.txt)
 			if fileName == "vocabulary.json" {
 				// Try vocabulary.txt instead
 				altURL := fmt.Sprintf("%s/resolve/main/vocabulary.txt", modelInfo.URL)
 				altPath := filepath.Join(modelPath, "vocabulary.txt")
 				logger.Info("Trying alternate vocabulary file", "url", altURL)
-				if err := m.downloadFile(altURL, altPath, 0, nil); err != nil {
+				if err := m.downloadFile(altURL, altPath, onDelta); err != nil {
 					return fmt.Errorf("failed to download vocabulary: %w", err)
 				}
 			} else {
 				return fmt.Errorf("failed to download %s: %w", fileName, err)
 			}
 		}
+	}
 
-		// Report progress
-		if onProgress != nil {
-			progress := float64(i+1) / float64(totalFiles)
-			onProgress(progress)
-		}
+	// Size is approximate, so force the bar to 100% on success.
+	if onProgress != nil {
+		onProgress(1.0)
 	}
 
 	logger.Info("Model downloaded successfully", "model", modelName, "path", modelPath)
 	return nil
 }
 
-// downloadFile downloads a file from URL to destPath
-func (m *ModelManager) downloadFile(url, destPath string, expectedSize int64, onProgress ProgressCallback) error {
-	// Create request
+// downloadFile streams url to destPath, invoking onDelta (if non-nil) with the
+// byte count of each chunk written so the caller can track overall progress.
+func (m *ModelManager) downloadFile(url, destPath string, onDelta func(n int)) error {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
 	}
 
-	// Start download
 	resp, err := m.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -131,44 +152,21 @@ func (m *ModelManager) downloadFile(url, destPath string, expectedSize int64, on
 		return fmt.Errorf("server returned status %d for %s", resp.StatusCode, url)
 	}
 
-	// Create destination file
 	file, err := os.Create(destPath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// Get content length
-	totalSize := resp.ContentLength
-	if totalSize <= 0 && expectedSize > 0 {
-		totalSize = expectedSize
-	}
-
-	// Download with progress reporting
-	var downloaded int64
 	buffer := make([]byte, 32*1024) // 32KB buffer
-
-	lastProgressUpdate := time.Now()
-	const progressUpdateInterval = 100 * time.Millisecond
-
 	for {
-		// Read chunk
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
-			// Write to file
 			if _, writeErr := file.Write(buffer[:n]); writeErr != nil {
 				return writeErr
 			}
-			downloaded += int64(n)
-
-			// Report progress (throttled)
-			if onProgress != nil && totalSize > 0 && time.Since(lastProgressUpdate) >= progressUpdateInterval {
-				progress := float64(downloaded) / float64(totalSize)
-				if progress > 1.0 {
-					progress = 1.0
-				}
-				onProgress(progress)
-				lastProgressUpdate = time.Now()
+			if onDelta != nil {
+				onDelta(n)
 			}
 		}
 
