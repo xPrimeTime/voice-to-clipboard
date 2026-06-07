@@ -346,15 +346,6 @@ func (c *Config) HasModel() bool {
 	return true
 }
 
-// GetModelInfo returns information about the current model
-func (c *Config) GetModelInfo() (ModelInfo, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	info, ok := AvailableModels[c.Model]
-	return info, ok
-}
-
 // SetAutoHide sets the auto-hide setting (thread-safe, persists to disk)
 func (c *Config) SetAutoHide(enabled bool) error {
 	c.mu.Lock()

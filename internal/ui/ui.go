@@ -27,22 +27,10 @@ import (
 // AppName is the application display name
 const AppName = "Voice to Clipboard"
 
-// UI dimension constants
+// Window dimensions (other layout sizes are applied inline in the layout funcs)
 const (
-	// Window dimensions
 	WindowWidth  = 120
 	WindowHeight = 40
-
-	// Button dimensions
-	ButtonWidth  = 36
-	ButtonHeight = 28
-	BorderRadius = 6
-	BorderWidth  = 2
-
-	// Visualizer bar dimensions
-	BarWidth   = 8
-	BarSpacing = 4
-	BarRadius  = 3
 )
 
 // Colors matching Python GTK4 CSS
@@ -146,13 +134,6 @@ func (u *UI) SetState(s State) {
 	}
 }
 
-// GetState returns current state
-func (u *UI) GetState() State {
-	u.stateMu.RLock()
-	defer u.stateMu.RUnlock()
-	return u.state
-}
-
 // SetBarHeights updates the visualizer bar heights (0.0 to 1.0)
 func (u *UI) SetBarHeights(heights [4]float32) {
 	u.barMu.Lock()
@@ -197,13 +178,6 @@ func (u *UI) Show() {
 			u.window.Invalidate()
 		}
 	}
-}
-
-// IsHidden returns whether the window is marked as hidden
-func (u *UI) IsHidden() bool {
-	u.hiddenMu.Lock()
-	defer u.hiddenMu.Unlock()
-	return u.isHidden
 }
 
 // handleInput processes keyboard and mouse input

@@ -25,7 +25,6 @@ type ModelManager struct {
 	// Download state
 	mu          sync.Mutex
 	downloading bool
-	cancelChan  chan struct{}
 }
 
 // NewModelManager creates a new model manager
@@ -38,41 +37,6 @@ func NewModelManager(cfg *config.Config) *ModelManager {
 	}
 }
 
-// IsModelAvailable checks if the specified model is downloaded and valid
-func (m *ModelManager) IsModelAvailable(modelName string) bool {
-	_, ok := config.AvailableModels[modelName]
-	if !ok {
-		return false
-	}
-
-	modelPath := filepath.Join(m.config.ModelCacheDir(), modelName)
-
-	// Check if directory exists and contains required CTranslate2 files
-	info, err := os.Stat(modelPath)
-	if err != nil {
-		return false
-	}
-
-	if !info.IsDir() {
-		return false
-	}
-
-	// Check for required CTranslate2 model files
-	for _, file := range config.RequiredModelFiles {
-		filePath := filepath.Join(modelPath, file)
-		if _, err := os.Stat(filePath); err != nil {
-			return false
-		}
-	}
-
-	return true
-}
-
-// GetCurrentModelPath returns the path to the currently configured model
-func (m *ModelManager) GetCurrentModelPath() string {
-	return m.config.ModelPath()
-}
-
 // DownloadModel downloads a CTranslate2 model from HuggingFace via direct HTTP
 func (m *ModelManager) DownloadModel(modelName string, onProgress ProgressCallback) error {
 	m.mu.Lock()
@@ -81,13 +45,11 @@ func (m *ModelManager) DownloadModel(modelName string, onProgress ProgressCallba
 		return errors.New("another download is already in progress")
 	}
 	m.downloading = true
-	m.cancelChan = make(chan struct{}, 1) // Buffered to allow non-blocking cancel
 	m.mu.Unlock()
 
 	defer func() {
 		m.mu.Lock()
 		m.downloading = false
-		m.cancelChan = nil // Set to nil instead of closing to avoid panic in CancelDownload
 		m.mu.Unlock()
 	}()
 
@@ -190,13 +152,6 @@ func (m *ModelManager) downloadFile(url, destPath string, expectedSize int64, on
 	const progressUpdateInterval = 100 * time.Millisecond
 
 	for {
-		// Check for cancellation
-		select {
-		case <-m.cancelChan:
-			return errors.New("download cancelled")
-		default:
-		}
-
 		// Read chunk
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
@@ -226,17 +181,4 @@ func (m *ModelManager) downloadFile(url, destPath string, expectedSize int64, on
 	}
 
 	return nil
-}
-
-// CancelDownload cancels any in-progress download
-func (m *ModelManager) CancelDownload() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.downloading && m.cancelChan != nil {
-		select {
-		case m.cancelChan <- struct{}{}:
-		default:
-		}
-	}
 }

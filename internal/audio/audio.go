@@ -16,7 +16,6 @@ import (
 const (
 	VisualizerBarMinHeight = 3
 	VisualizerBarMaxHeight = 18
-	VisualizerBarCount     = 4
 )
 
 // Recorder handles audio capture from the microphone
@@ -144,11 +143,6 @@ func (r *Recorder) Stop() ([]float32, error) {
 
 	logger.Info("Recording stopped", "samples", len(result), "duration_sec", float64(len(result))/float64(r.config.SampleRate))
 	return result, nil
-}
-
-// IsRecording returns whether recording is in progress
-func (r *Recorder) IsRecording() bool {
-	return r.isRecording.Load()
 }
 
 // LevelChannel returns the channel for audio level updates

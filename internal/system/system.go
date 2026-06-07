@@ -17,7 +17,7 @@ const (
 )
 
 var (
-	isHyprlandCached *bool
+	isHyprlandCached  *bool
 	hyprlandCheckOnce sync.Once
 )
 
