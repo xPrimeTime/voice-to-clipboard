@@ -261,6 +261,13 @@ func (c *Config) ConfigFilePath() string {
 
 // ModelCacheDir returns the directory where models are cached
 func (c *Config) ModelCacheDir() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.modelCacheDirLocked()
+}
+
+// modelCacheDirLocked returns the model cache directory. Callers must hold c.mu.
+func (c *Config) modelCacheDirLocked() string {
 	if c.ModelCachePath != "" {
 		return c.ModelCachePath
 	}
@@ -269,7 +276,9 @@ func (c *Config) ModelCacheDir() string {
 
 // ModelPath returns the full path to the current model directory (CTranslate2 format)
 func (c *Config) ModelPath() string {
-	return filepath.Join(c.ModelCacheDir(), c.Model)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return filepath.Join(c.modelCacheDirLocked(), c.Model)
 }
 
 // LogFilePath returns the path to the log file
@@ -294,12 +303,30 @@ func (c *Config) DataDir() string {
 
 // VADModelPath returns the path to the extracted Silero VAD model (empty if not set).
 func (c *Config) VADModelPath() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.vadModelPath
 }
 
 // SetVADModelPath records the on-disk path of the extracted Silero VAD model.
 func (c *Config) SetVADModelPath(path string) {
+	c.mu.Lock()
 	c.vadModelPath = path
+	c.mu.Unlock()
+}
+
+// GetLanguage returns the transcription language (thread-safe).
+func (c *Config) GetLanguage() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Language
+}
+
+// GetVADEnabled returns whether VAD filtering is enabled (thread-safe).
+func (c *Config) GetVADEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.VADEnabled
 }
 
 // SetModel changes the current model (thread-safe)

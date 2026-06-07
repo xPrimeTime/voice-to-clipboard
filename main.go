@@ -241,7 +241,7 @@ func main() {
 	}
 	defer logger.Close()
 
-	logger.Info("App starting", "model", cfg.Model)
+	logger.Info("App starting", "model", cfg.GetModel())
 
 	// Pin CPU inference to physical cores (unless OMP_NUM_THREADS is set) so the
 	// float32 Whisper encoder doesn't oversubscribe SMT siblings. Must run before

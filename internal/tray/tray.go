@@ -56,7 +56,7 @@ func New(cfg *config.Config) *Tray {
 	return &Tray{
 		config:        cfg,
 		modelItems:    make(map[string]*systray.MenuItem),
-		currentModel:  cfg.Model,
+		currentModel:  cfg.GetModel(),
 		currentStatus: "idle",
 	}
 }

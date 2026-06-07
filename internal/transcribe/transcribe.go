@@ -230,9 +230,9 @@ func (w *Worker) Transcribe(audioData []float32) <-chan Result {
 		// Perform transcription. Silence filtering is delegated to the library's
 		// Silero VAD (configured below) instead of a Go-side energy heuristic.
 		opts := TranscribeOptions{
-			Language:     w.cfg.Language,
+			Language:     w.cfg.GetLanguage(),
 			BeamSize:     1, // Greedy decoding for best speed (faster-whisper default for real-time)
-			VADEnabled:   w.cfg.VADEnabled,
+			VADEnabled:   w.cfg.GetVADEnabled(),
 			VADModelPath: w.cfg.VADModelPath(),
 		}
 
