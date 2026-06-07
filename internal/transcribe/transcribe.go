@@ -126,7 +126,7 @@ func (w *Whisper) Transcribe(audio []float32, opts TranscribeOptions) (Result, e
 	// Calculate Real-Time Factor (RTF): processing_time / audio_duration
 	// RTF < 1 means faster than real-time, RTF > 1 means slower
 	rtf := transcribeTime / duration
-	logger.Info("Transcription complete", "duration_seconds", transcribeTime, "rtf", rtf)
+	logger.Info("Whisper decode complete", "duration_seconds", transcribeTime, "rtf", rtf)
 
 	return Result{
 		Text:     result.Text,
@@ -216,7 +216,7 @@ func (w *Worker) Transcribe(audioData []float32) <-chan Result {
 		startTime := time.Now()
 		audioDuration := float64(len(audioData)) / 16000.0
 
-		logger.Info("Transcribing audio", "duration_seconds", audioDuration)
+		logger.Debug("Worker transcribing audio", "duration_seconds", audioDuration)
 
 		// Ensure model is loaded
 		w.mu.Lock()
@@ -242,8 +242,7 @@ func (w *Worker) Transcribe(audioData []float32) <-chan Result {
 			return
 		}
 
-		totalTime := time.Since(startTime).Seconds()
-		logger.Info("Transcription complete", "total_seconds", totalTime)
+		logger.Debug("Worker transcription finished", "total_seconds", time.Since(startTime).Seconds())
 
 		resultChan <- result
 	}()

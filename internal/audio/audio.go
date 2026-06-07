@@ -115,7 +115,7 @@ func (r *Recorder) Start() error {
 		return err
 	}
 
-	logger.Info("Recording started")
+	logger.Debug("Recording device started")
 	return nil
 }
 
@@ -141,7 +141,7 @@ func (r *Recorder) Stop() ([]float32, error) {
 	r.buffer = nil
 	r.bufferMu.Unlock()
 
-	logger.Info("Recording stopped", "samples", len(result), "duration_sec", float64(len(result))/float64(r.config.SampleRate))
+	logger.Debug("Recording device stopped", "samples", len(result), "duration_sec", float64(len(result))/float64(r.config.SampleRate))
 	return result, nil
 }
 
