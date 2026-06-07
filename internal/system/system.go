@@ -1,7 +1,9 @@
 package system
 
 import (
+	"encoding/json"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -66,26 +68,28 @@ func HideWindow(windowTitle string) error {
 func ShowWindow(windowTitle string) error {
 	// Try Hyprland first
 	if isHyprland() {
-		// Move from special workspace to current workspace using class name
 		classArg := "class:" + WindowClass
-		cmd := exec.Command("hyprctl", "dispatch", "movetoworkspace", "current,"+classArg)
-		if err := cmd.Run(); err != nil {
-			logger.Debug("hyprctl show failed", "error", err)
-			return err
+
+		// Move the window from special:hidden back to the active workspace.
+		// Resolve the active workspace id explicitly — the "current" selector is
+		// rejected ("Invalid workspace") by Hyprland 0.5x, which left the window
+		// stuck hidden and made the later focuswindow misbehave (the window would
+		// tile fullscreen or never reappear).
+		if ws := activeWorkspaceID(); ws != "" {
+			cmd := exec.Command("hyprctl", "dispatch", "movetoworkspacesilent", ws+","+classArg)
+			if err := cmd.Run(); err != nil {
+				logger.Debug("hyprctl movetoworkspacesilent failed", "error", err)
+			}
 		}
 
-		// Moving a window out of the special workspace can drop its floating
-		// state. Force it floating deterministically with setfloating: a blind
-		// togglefloating would tile an already-floating window, which on Hyprland
-		// expands to fill the whole screen (the "fullscreen overlay" bug).
-		cmd = exec.Command("hyprctl", "dispatch", "setfloating", classArg)
-		if err := cmd.Run(); err != nil {
+		// Force floating deterministically with setfloating (idempotent): a
+		// frameless fixed-size window otherwise tiles and fills the screen.
+		if err := exec.Command("hyprctl", "dispatch", "setfloating", classArg).Run(); err != nil {
 			logger.Debug("hyprctl setfloating failed", "error", err)
 		}
 
-		// Focus the window (non-critical, log but don't fail)
-		cmd = exec.Command("hyprctl", "dispatch", "focuswindow", classArg)
-		if err := cmd.Run(); err != nil {
+		// Focus the window (non-critical).
+		if err := exec.Command("hyprctl", "dispatch", "focuswindow", classArg).Run(); err != nil {
 			logger.Debug("hyprctl focuswindow failed", "error", err)
 		}
 		logger.Debug("Window shown via hyprctl")
@@ -104,6 +108,22 @@ func ShowWindow(windowTitle string) error {
 		logger.Debug("wmctrl activate failed", "error", err)
 	}
 	return nil
+}
+
+// activeWorkspaceID returns the id of the currently active Hyprland workspace as
+// a string, or "" if it can't be determined.
+func activeWorkspaceID() string {
+	out, err := exec.Command("hyprctl", "activeworkspace", "-j").Output()
+	if err != nil {
+		return ""
+	}
+	var ws struct {
+		ID int `json:"id"`
+	}
+	if err := json.Unmarshal(out, &ws); err != nil {
+		return ""
+	}
+	return strconv.Itoa(ws.ID)
 }
 
 // EnsureFloating forces the app window to float on Hyprland. A frameless,
