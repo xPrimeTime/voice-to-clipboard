@@ -1,0 +1,48 @@
+# Binaries
+build/
+/voice-to-clipboard
+/voice-to-clipboard.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Wails
+frontend/node_modules/
+frontend/dist/
+frontend/wailsjs/
+
+# Models (don't commit large models)
+models/
+*.bin
+*.ggml
+
+# Config and cache (user-specific)
+config.json
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
