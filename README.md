@@ -254,9 +254,12 @@ with `/path/to/voice-to-clipboard --quit` or the IPC keybinds. See
 
 ### Hyprland: window fills the whole screen (fullscreen overlay)
 The 120×40 window must **float**; a tiled window fills the workspace on
-Hyprland. The app forces floating via `hyprctl dispatch setfloating` when it
-shows the window, but for guaranteed behavior from the moment it launches, add
-a float rule to `~/.config/hypr/hyprland.conf` (syntax differs by version):
+Hyprland. The app handles this itself — it runs `hyprctl dispatch setfloating`
+on its own window at startup (and when showing it) — so no config is needed.
+
+If you still see it tile (e.g. a custom layout/plugin overrides it), add an
+explicit float rule to `~/.config/hypr/hyprland.conf` and `hyprctl reload`
+(syntax differs by version):
 
 ```bash
 # Hyprland 0.4x+ (unified windowrule with match:)
@@ -265,10 +268,6 @@ windowrule = float on, match:class ^(voice-to-clipboard)$
 # Older Hyprland (windowrulev2)
 # windowrulev2 = float, class:^(voice-to-clipboard)$
 ```
-
-Then `hyprctl reload`.
-
-(Optionally `size 120 40` and a `move` rule to pin its position.)
 
 ### Build/test in restricted environments
 If `go build` or `go test` fails because the default Go build cache is not writable, point `GOCACHE` at a writable directory:

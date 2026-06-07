@@ -490,10 +490,11 @@ tray hosts vary too much to rely on (some don't forward menu clicks, some need a
 module/extension), and Wayland has no global hotkeys. The tray icon's left-click
 (SNI Activate, `systray.SetOnTapped`) toggles recording as a fallback gesture.
 
-Window management on Hyprland forces floating via `hyprctl dispatch setfloating`
-when showing the window; a blind `togglefloating` would tile an already-floating
-window, which fills the screen (the fullscreen-overlay bug). A float windowrule
-(`float on, match:class ^(voice-to-clipboard)$` on Hyprland 0.4x+) guarantees it.
+Window management on Hyprland floats the app's own window: `system.EnsureFloating()`
+runs `hyprctl dispatch setfloating` a few times as the window maps at startup,
+and `ShowWindow` uses `setfloating` too. A blind `togglefloating` would tile an
+already-floating window, which fills the screen (the fullscreen-overlay bug). No
+user windowrule is needed; an explicit `float on` rule is only a fallback.
 
 ---
 
