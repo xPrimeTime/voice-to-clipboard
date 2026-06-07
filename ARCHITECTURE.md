@@ -230,6 +230,15 @@ delegated to the transcription library's Silero VAD (see below).
 - `ModelManager.DownloadModel()`: Fetch model from Hugging Face
 - `Worker.EnsureModelLoaded()`: Load/reload active model after config changes
 - `ExtractVADModel()`: Materialize the embedded Silero VAD model to the cache dir
+- `ConfigureCPUThreads()`: Set `OMP_NUM_THREADS` to physical cores at startup
+
+**CPU threads:**
+`ConfigureCPUThreads()` (called early in `main()`, before the first model load)
+sets `OMP_NUM_THREADS` to the physical core count unless the user already set it.
+This pins CTranslate2's float32 kernels to physical cores instead of
+oversubscribing SMT siblings — ~35% faster encode in testing. A model directory
+must include `tokenizer.json` (validated via `RequiredModelFiles`); v1.2.0+ fails
+to load without it.
 
 **Voice Activity Detection:**
 When `VADEnabled` is set, transcription passes `WithVADFilter(true)` plus
@@ -462,6 +471,17 @@ bundle scripts allowlist `libonnxruntime` so it ships alongside the CT2 libs.
 2. Initializes default config (`small` is the config default)
 3. If no model is present on disk, auto-downloads `base` and shows progress in the UI
 4. Starts tray and global hotkey handlers when supported
+
+### Single-Instance IPC
+
+The app listens on a per-user Unix socket
+(`$XDG_RUNTIME_DIR/voice-to-clipboard/ipc.sock`). Re-launching with a control
+flag dials the socket and sends a command to the running instance instead of
+opening a second window:
+
+- `--toggle`: start/stop recording (intended for compositor keybinds)
+- `--quit`: cleanly exit the running instance — a reliable shutdown path when the
+  tray menu's Quit isn't delivered (some Wayland panels)
 
 ---
 

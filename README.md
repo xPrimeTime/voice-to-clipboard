@@ -67,7 +67,7 @@ Binary will be in `build/bin/voice-to-clipboard`
 - 🔔 **Notifications** - Desktop notifications on completion
 - 🎯 **Cross-platform** - Linux (Wayland/X11) and Windows
 - 🔊 **Audio feedback** - Sounds for start/stop/done
-- 🚀 **Optimized performance** - Set `OMP_NUM_THREADS` for optimal speed
+- 🚀 **Optimized performance** - Auto-tunes CPU threads to your physical cores
 
 ## Usage
 
@@ -123,6 +123,18 @@ Right-click the tray icon for:
 - Model selection
 - Quit
 
+> **Wayland note:** some Wayland panels do not deliver tray menu clicks to
+> `fyne.io/systray` apps, so the tray menu (including **Quit**) may do nothing.
+> If that happens, quit reliably from a terminal or keybind with:
+>
+> ```bash
+> /path/to/voice-to-clipboard --quit
+> ```
+>
+> `--quit` talks to the running instance over its IPC socket and exits it
+> cleanly, independent of the tray. You can also close via the window's close
+> button when auto-hide/keep-hidden are off.
+
 ## Configuration
 
 Settings are stored in:
@@ -150,20 +162,35 @@ Models are cached at:
 
 ## Performance Optimization
 
-For **optimal transcription speed** (~1.8x faster), set the `OMP_NUM_THREADS` environment variable:
+### CPU threads (automatic)
+
+On startup the app detects your **physical core count** and sets
+`OMP_NUM_THREADS` to it (unless you already set the variable). This keeps
+CTranslate2's CPU kernels on physical cores instead of oversubscribing SMT/
+hyperthread siblings, which measured **~35% faster** on the Whisper encoder
+(e.g. ~1.75s → ~1.17s encode on an 8-core/16-thread Ryzen).
+
+To override the automatic value, set `OMP_NUM_THREADS` yourself:
 
 ```bash
-# Linux/macOS - Add to ~/.bashrc or ~/.zshrc
-export OMP_NUM_THREADS=12  # Use ~75% of your CPU threads
-
-# Or run once per session
-OMP_NUM_THREADS=12 ./voice-to-clipboard
+# Linux/macOS - add to ~/.bashrc or ~/.zshrc, or run once per session
+OMP_NUM_THREADS=8 ./voice-to-clipboard
 ```
 
-**Recommended values by CPU:**
-- 16-thread CPU (8 cores): `OMP_NUM_THREADS=12`
-- 8-thread CPU (4 cores): `OMP_NUM_THREADS=6`
-- 4-thread CPU (2 cores): `OMP_NUM_THREADS=3`
+Physical cores is a good default; going above it (into SMT threads) usually
+slows transcription rather than speeding it up.
+
+### Compute type
+
+On CPU the app uses CTranslate2's `default` compute type, which runs the
+float16 faster-whisper weights as **float32**. `int8` would be faster but
+requires a CPU/CTranslate2 build with efficient int8 support (e.g. AVX-512 VNNI);
+where it is unavailable, model loading fails, so `default` is used.
+
+### Use a smaller model
+
+`base` is roughly 3× faster than `small` (the default). Switch via the tray or
+`config.json` if you want lower latency and can accept slightly lower accuracy.
 
 **Rule of thumb**: Use 75% of your total thread count for best performance.
 
@@ -210,6 +237,25 @@ sudo apt install wl-clipboard  # Ubuntu
 
 ### Model download fails
 Check internet connection and try again. Models download from HuggingFace and may be slow.
+
+### Transcription fails with "Failed to open tokenizer file"
+The model directory is missing `tokenizer.json`, which go-whisper-ct2 v1.2.0+
+requires. Models downloaded by older versions only have `model.bin`,
+`config.json`, and a vocabulary file. Fix by re-downloading the model (delete
+its folder under `~/.cache/voice-to-clipboard/models/<model>/` and reselect it),
+or fetch the file directly:
+
+```bash
+cd ~/.cache/voice-to-clipboard/models/<model>
+curl -fLO https://huggingface.co/Systran/faster-whisper-<model>/resolve/main/tokenizer.json
+```
+
+New downloads include `tokenizer.json` automatically.
+
+### Tray menu / Quit does nothing (Wayland)
+Some Wayland panels don't deliver tray menu clicks to the app. Quit reliably
+with `/path/to/voice-to-clipboard --quit`, or use the window close button. See
+[System Tray](#system-tray).
 
 ### Build/test in restricted environments
 If `go build` or `go test` fails because the default Go build cache is not writable, point `GOCACHE` at a writable directory:
