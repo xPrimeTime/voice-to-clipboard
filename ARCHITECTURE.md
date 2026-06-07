@@ -479,9 +479,18 @@ The app listens on a per-user Unix socket
 flag dials the socket and sends a command to the running instance instead of
 opening a second window:
 
-- `--toggle`: start/stop recording (intended for compositor keybinds)
-- `--quit`: cleanly exit the running instance — a reliable shutdown path when the
-  tray menu's Quit isn't delivered (some Wayland panels)
+- `--toggle`: start/stop recording
+- `--quit`: cleanly exit the running instance
+- `--show` / `--hide`: show or hide the window
+
+This is a deliberately tray-independent control plane (bind to compositor keys):
+tray hosts vary too much to rely on (some don't forward menu clicks, some need a
+module/extension), and Wayland has no global hotkeys. The tray icon's left-click
+(SNI Activate, `systray.SetOnTapped`) also shows the window as a fallback gesture.
+
+Window management on Hyprland forces floating via `hyprctl dispatch setfloating`
+when showing the window; a blind `togglefloating` would tile an already-floating
+window, which fills the screen (the fullscreen-overlay bug).
 
 ---
 

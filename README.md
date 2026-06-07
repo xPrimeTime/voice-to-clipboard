@@ -80,24 +80,27 @@ Binary will be in `build/bin/voice-to-clipboard`
 - **Linux X11**: Global hotkey via robotn/gohook
 - **Linux Wayland**: Use compositor keybinds (see below)
 
-### Compositor Keybinds (Wayland/Any)
+### Controlling the app (works on any compositor)
 
-For Wayland or if you prefer compositor-managed hotkeys:
+The most portable way to drive the app is the **IPC command layer**. A second
+launch with a control flag talks to the running instance over its IPC socket
+instead of opening a new window — these work identically on X11, Wayland, any
+compositor, and regardless of whether the system tray works:
 
-**Hyprland** (`~/.config/hypr/hyprland.conf`):
+| Command                        | Action                          |
+|--------------------------------|---------------------------------|
+| `voice-to-clipboard --toggle`  | Start/stop recording            |
+| `voice-to-clipboard --quit`    | Quit the running instance       |
+| `voice-to-clipboard --show`    | Show the window                 |
+| `voice-to-clipboard --hide`    | Hide the window                 |
+
+Bind them to compositor keys. **Hyprland** (`~/.config/hypr/hyprland.conf`):
 ```bash
-bind = SUPER, R, exec, /path/to/voice-to-clipboard --toggle
+bind = SUPER, R,        exec, /path/to/voice-to-clipboard --toggle
+bind = SUPER SHIFT, Q,  exec, /path/to/voice-to-clipboard --quit
+bind = SUPER SHIFT, S,  exec, /path/to/voice-to-clipboard --show
 ```
-
-**Sway** (`~/.config/sway/config`):
-```bash
-bindsym $mod+r exec /path/to/voice-to-clipboard --toggle
-```
-
-**i3/i3wm** (`~/.config/i3/config`):
-```bash
-bindsym $mod+r exec --no-startup-id /path/to/voice-to-clipboard --toggle
-```
+**Sway** (`~/.config/sway/config`) / **i3** use `bindsym $mod+r exec …` the same way.
 
 ### In-App Shortcuts
 
@@ -116,24 +119,16 @@ bindsym $mod+r exec --no-startup-id /path/to/voice-to-clipboard --toggle
 
 ### System Tray
 
-Right-click the tray icon for:
-- Toggle Recording
-- Auto-hide window on close
-- Keep window hidden (tray-only mode)
-- Model selection
-- Quit
+The tray icon is a **status indicator** plus a best-effort menu:
+- **Left-click** the icon: show the window (works on most hosts).
+- **Right-click**: menu with Toggle Recording, Auto-hide, Keep hidden, Model
+  selection, Quit.
 
-> **Wayland note:** some Wayland panels do not deliver tray menu clicks to
-> `fyne.io/systray` apps, so the tray menu (including **Quit**) may do nothing.
-> If that happens, quit reliably from a terminal or keybind with:
->
-> ```bash
-> /path/to/voice-to-clipboard --quit
-> ```
->
-> `--quit` talks to the running instance over its IPC socket and exits it
-> cleanly, independent of the tray. You can also close via the window's close
-> button when auto-hide/keep-hidden are off.
+> **Tray portability:** tray hosts vary a lot. Some Wayland panels (e.g. AGS)
+> show the icon but **don't deliver menu clicks**, others (waybar) need a `tray`
+> module, and GNOME needs an extension. So don't rely on the tray menu — use the
+> IPC commands above (bound to keys) as the primary control. The icon's
+> left-click (show window) and the in-app shortcuts always work.
 
 ## Configuration
 
@@ -254,8 +249,20 @@ New downloads include `tokenizer.json` automatically.
 
 ### Tray menu / Quit does nothing (Wayland)
 Some Wayland panels don't deliver tray menu clicks to the app. Quit reliably
-with `/path/to/voice-to-clipboard --quit`, or use the window close button. See
-[System Tray](#system-tray).
+with `/path/to/voice-to-clipboard --quit`, left-click the icon to show the
+window, or use the IPC keybinds. See [System Tray](#system-tray).
+
+### Hyprland: window fills the whole screen (fullscreen overlay)
+The 120×40 window must **float**; a tiled window fills the workspace on
+Hyprland. The app forces floating via `hyprctl dispatch setfloating` when it
+shows the window, but for guaranteed behavior from the moment it launches, add
+a float rule to `~/.config/hypr/hyprland.conf`:
+
+```bash
+windowrulev2 = float, class:^(voice-to-clipboard)$
+```
+
+(Optionally `size 120 40` and a `move` rule to pin its position.)
 
 ### Build/test in restricted environments
 If `go build` or `go test` fails because the default Go build cache is not writable, point `GOCACHE` at a writable directory:
