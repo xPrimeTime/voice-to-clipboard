@@ -34,6 +34,7 @@ type Tray struct {
 	OnQuit             func()
 	OnKeepHiddenToggle func(enabled bool)
 	OnAutoHideToggle   func(enabled bool)
+	OnLeftClick        func() // tray icon left-click (SNI Activate)
 
 	// Menu items
 	statusItem     *systray.MenuItem
@@ -158,6 +159,16 @@ func (t *Tray) Run() {
 
 // onReady is called when systray is ready
 func (t *Tray) onReady() {
+	// Wire left-click (SNI Activate) to a primary action. Right-click still
+	// opens the menu on hosts that support it; this gives a working gesture on
+	// hosts that deliver Activate but not menu clicks (e.g. some Wayland panels).
+	// Setting only the left tap keeps the right-click menu intact elsewhere.
+	systray.SetOnTapped(func() {
+		if t.OnLeftClick != nil {
+			t.OnLeftClick()
+		}
+	})
+
 	// Load base icon and set initial status icon
 	baseIcon = loadBaseIcon()
 	iconData := createStatusIcon("idle")

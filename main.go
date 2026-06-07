@@ -119,6 +119,17 @@ func sendCommandToExistingInstance(command string) bool {
 	return true
 }
 
+// dispatchControlCommand sends a control command to a running instance and exits
+// the process: 0 if the command was delivered, 1 if no instance is running.
+func dispatchControlCommand(command string) {
+	if sendCommandToExistingInstance(command) {
+		fmt.Printf("Sent %s command to running instance\n", command)
+		os.Exit(0)
+	}
+	fmt.Println("No running instance found")
+	os.Exit(1)
+}
+
 // startIPCServer starts listening for IPC commands
 func (a *App) startIPCServer() error {
 	socketPath := getSocketPath()
@@ -190,39 +201,43 @@ func (a *App) handleIPCConnection(conn net.Conn) {
 		// reaches the peer's socket buffer before quit() calls os.Exit.
 		conn.Write([]byte("ok\n"))
 		a.quit("ipc")
+	case "show":
+		logger.Info("Received show command via IPC")
+		if a.ui != nil {
+			a.ui.Show()
+		}
+		conn.Write([]byte("ok\n"))
+	case "hide":
+		logger.Info("Received hide command via IPC")
+		if a.ui != nil {
+			a.ui.Hide()
+		}
+		conn.Write([]byte("ok\n"))
 	default:
 		conn.Write([]byte("unknown\n"))
 	}
 }
 
 func main() {
-	// Parse command-line flags
-	toggleFlag := flag.Bool("toggle", false, "Toggle recording in existing instance")
-	quitFlag := flag.Bool("quit", false, "Quit a running instance")
+	// Control flags drive a running instance over the IPC socket instead of
+	// starting a new window. These form a tray-independent control plane that
+	// works on any compositor/session (bind them to compositor keybinds): some
+	// tray hosts don't deliver menu clicks, and Wayland has no global hotkeys.
+	toggleFlag := flag.Bool("toggle", false, "Toggle recording in the running instance")
+	quitFlag := flag.Bool("quit", false, "Quit the running instance")
+	showFlag := flag.Bool("show", false, "Show the running instance's window")
+	hideFlag := flag.Bool("hide", false, "Hide the running instance's window")
 	flag.Parse()
 
-	// If --toggle flag is set, try to toggle existing instance
-	if *toggleFlag {
-		if sendCommandToExistingInstance("toggle") {
-			fmt.Println("Sent toggle command to running instance")
-			os.Exit(0)
-		} else {
-			fmt.Println("No running instance found")
-			os.Exit(1)
-		}
-	}
-
-	// If --quit flag is set, ask a running instance to exit. This is a reliable
-	// way to close the app when the tray menu's Quit is unavailable (e.g. some
-	// Wayland panels don't deliver tray menu clicks).
-	if *quitFlag {
-		if sendCommandToExistingInstance("quit") {
-			fmt.Println("Sent quit command to running instance")
-			os.Exit(0)
-		} else {
-			fmt.Println("No running instance found")
-			os.Exit(1)
-		}
+	switch {
+	case *toggleFlag:
+		dispatchControlCommand("toggle")
+	case *quitFlag:
+		dispatchControlCommand("quit")
+	case *showFlag:
+		dispatchControlCommand("show")
+	case *hideFlag:
+		dispatchControlCommand("hide")
 	}
 
 	app := &App{}
@@ -377,6 +392,11 @@ func main() {
 		if !enabled && !app.tray.IsKeepHiddenEnabled() {
 			app.ui.Show()
 		}
+	}
+	// Left-clicking the tray icon brings the window back. This is the universal
+	// "recover the UI" gesture for hosts where the right-click menu doesn't work.
+	app.tray.OnLeftClick = func() {
+		app.ui.Show()
 	}
 	go app.tray.Run()
 
