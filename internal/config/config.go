@@ -38,9 +38,11 @@ type Config struct {
 }
 
 // RequiredModelFiles lists the files needed for a valid CTranslate2 model.
-// vocabulary.json (or vocabulary.txt) is downloaded but not required for validation
-// since some models use different vocabulary file formats.
-var RequiredModelFiles = []string{"model.bin", "config.json"}
+// tokenizer.json is required by go-whisper-ct2 v1.2.0+ (HF fast tokenizer used
+// for token-based prompts); without it, model loading fails at transcribe time.
+// vocabulary.json (or vocabulary.txt) is downloaded but not required for
+// validation since some models use different vocabulary file formats.
+var RequiredModelFiles = []string{"model.bin", "config.json", "tokenizer.json"}
 
 // ModelInfo contains information about a Whisper model
 type ModelInfo struct {
