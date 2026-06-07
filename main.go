@@ -326,6 +326,16 @@ func main() {
 	app.tray.OnLeftClick = app.toggleRecording
 	go app.tray.Run()
 
+	// On Hyprland, force the window to float once it maps so a frameless
+	// fixed-size window doesn't tile and fill the screen. Retry across a short
+	// window since the window appears asynchronously after ui.Run starts.
+	go func() {
+		for _, d := range []time.Duration{250 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second} {
+			time.Sleep(d)
+			system.EnsureFloating()
+		}
+	}()
+
 	// Run UI (blocks)
 	logger.Info("Starting UI")
 	if err := app.ui.Run(); err != nil {

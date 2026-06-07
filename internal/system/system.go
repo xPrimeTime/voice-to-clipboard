@@ -106,6 +106,20 @@ func ShowWindow(windowTitle string) error {
 	return nil
 }
 
+// EnsureFloating forces the app window to float on Hyprland. A frameless,
+// fixed-size window otherwise tiles and fills the whole workspace (the
+// "fullscreen overlay" bug). Idempotent and a no-op on other compositors, so it
+// is safe to call repeatedly while the window is mapping at startup.
+func EnsureFloating() {
+	if !isHyprland() {
+		return
+	}
+	cmd := exec.Command("hyprctl", "dispatch", "setfloating", "class:"+WindowClass)
+	if err := cmd.Run(); err != nil {
+		logger.Debug("hyprctl setfloating (startup) failed", "error", err)
+	}
+}
+
 // isHyprland checks if running under Hyprland compositor (cached)
 func isHyprland() bool {
 	hyprlandCheckOnce.Do(func() {
