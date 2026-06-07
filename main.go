@@ -536,24 +536,27 @@ func (a *App) transcribe(audioData []float32) {
 
 	text := result.Text
 	if text == "" {
-		text = "[No speech detected]"
-	}
+		// No speech detected: don't overwrite the user's clipboard with a
+		// placeholder; just notify and fall through to the idle/auto-hide reset.
+		logger.Info("No speech detected; leaving clipboard unchanged")
+		system.ShowNotification(ui.AppName, "No speech detected")
+	} else {
+		// Copy to clipboard
+		if err := system.CopyToClipboard(text); err != nil {
+			logger.Error("Failed to copy to clipboard", "error", err)
+		}
 
-	// Copy to clipboard
-	if err := system.CopyToClipboard(text); err != nil {
-		logger.Error("Failed to copy to clipboard", "error", err)
-	}
+		// Show notification
+		preview := text
+		if len(preview) > 80 {
+			preview = preview[:80] + "..."
+		}
+		system.ShowNotification(ui.AppName, "Copied: "+preview)
 
-	// Show notification
-	preview := text
-	if len(preview) > 80 {
-		preview = preview[:80] + "..."
-	}
-	system.ShowNotification(ui.AppName, "Copied: "+preview)
-
-	// Play done sound
-	if a.player != nil {
-		a.player.PlaySoundAsync(audio.SoundDone)
+		// Play done sound
+		if a.player != nil {
+			a.player.PlaySoundAsync(audio.SoundDone)
+		}
 	}
 
 	a.isTranscribing.Store(false)
