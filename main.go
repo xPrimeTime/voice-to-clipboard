@@ -321,11 +321,9 @@ func main() {
 			app.ui.Show()
 		}
 	}
-	// Left-clicking the tray icon brings the window back. This is the universal
-	// "recover the UI" gesture for hosts where the right-click menu doesn't work.
-	app.tray.OnLeftClick = func() {
-		app.ui.Show()
-	}
+	// Left-clicking the tray icon toggles recording — the natural primary action
+	// for a voice app, and it avoids the window-show path entirely.
+	app.tray.OnLeftClick = app.toggleRecording
 	go app.tray.Run()
 
 	// Run UI (blocks)
