@@ -2,14 +2,11 @@ package main
 
 import (
 	"embed"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,6 +15,7 @@ import (
 	"voice-to-clipboard/internal/audio"
 	"voice-to-clipboard/internal/config"
 	"voice-to-clipboard/internal/hotkey"
+	"voice-to-clipboard/internal/ipc"
 	"voice-to-clipboard/internal/logger"
 	"voice-to-clipboard/internal/system"
 	"voice-to-clipboard/internal/transcribe"
@@ -47,59 +45,10 @@ type App struct {
 	hotkeyMgr   *hotkey.Manager
 }
 
-// getSocketPath returns the IPC socket path
-func getSocketPath() string {
-	return filepath.Join(getSocketDir(), "ipc.sock")
-}
-
-func getSocketDir() string {
-	// Prefer per-user runtime dir on Linux (typically /run/user/<uid>).
-	if runtime.GOOS == "linux" {
-		if runtimeDir := os.Getenv("XDG_RUNTIME_DIR"); runtimeDir != "" {
-			return filepath.Join(runtimeDir, "voice-to-clipboard")
-		}
-	}
-
-	// Cross-platform per-user cache dir fallback.
-	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
-		return filepath.Join(cacheDir, "voice-to-clipboard")
-	}
-
-	// Last-resort fallback for unusual environments.
-	return filepath.Join(os.TempDir(), "voice-to-clipboard")
-}
-
-func ensureSocketDir() error {
-	if err := os.MkdirAll(getSocketDir(), 0700); err != nil {
-		return fmt.Errorf("failed to create IPC directory: %w", err)
-	}
-	return nil
-}
-
-func removeStaleSocket(socketPath string) error {
-	info, err := os.Lstat(socketPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("failed to check socket path: %w", err)
-	}
-
-	// Refuse to remove unexpected non-socket files.
-	if info.Mode()&os.ModeSocket == 0 {
-		return fmt.Errorf("refusing to remove non-socket IPC path: %s", socketPath)
-	}
-
-	if err := os.Remove(socketPath); err != nil {
-		return fmt.Errorf("failed to remove stale socket: %w", err)
-	}
-	return nil
-}
-
 // sendCommandToExistingInstance sends a single IPC command to a running instance
 // and waits for its acknowledgment. Returns false if no instance is reachable.
 func sendCommandToExistingInstance(command string) bool {
-	conn, err := net.Dial("unix", getSocketPath())
+	conn, err := ipc.Dial()
 	if err != nil {
 		return false
 	}
@@ -132,33 +81,12 @@ func dispatchControlCommand(command string) {
 
 // startIPCServer starts listening for IPC commands
 func (a *App) startIPCServer() error {
-	socketPath := getSocketPath()
-
-	if err := ensureSocketDir(); err != nil {
-		return err
-	}
-
-	// Remove stale socket if exists.
-	if err := removeStaleSocket(socketPath); err != nil {
-		return err
-	}
-
-	listener, err := net.Listen("unix", socketPath)
+	listener, err := ipc.Listen()
 	if err != nil {
-		return fmt.Errorf("failed to create IPC socket: %w", err)
+		return err
 	}
 
 	a.ipcListener = listener
-
-	// Verify socket was created
-	if _, err := os.Stat(socketPath); err != nil {
-		listener.Close()
-		return fmt.Errorf("socket created but not accessible: %w", err)
-	}
-	if err := os.Chmod(socketPath, 0600); err != nil {
-		listener.Close()
-		return fmt.Errorf("failed to secure IPC socket permissions: %w", err)
-	}
 
 	go func() {
 		defer listener.Close()
@@ -350,12 +278,12 @@ func main() {
 		defer func() {
 			if app.ipcListener != nil {
 				app.ipcListener.Close()
-				if err := removeStaleSocket(getSocketPath()); err != nil {
-					logger.Warn("Failed to clean up IPC socket", "error", err)
+				if err := ipc.CleanupStale(); err != nil {
+					logger.Warn("Failed to clean up IPC endpoint", "error", err)
 				}
 			}
 		}()
-		logger.Info("IPC server started", "socket", getSocketPath())
+		logger.Info("IPC server started", "endpoint", ipc.Address())
 	}
 
 	// Start global hotkey listener if supported

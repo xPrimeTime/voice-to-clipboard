@@ -5,6 +5,7 @@ go 1.23.8
 require (
 	fyne.io/systray v1.12.0
 	gioui.org v0.9.0
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/atotto/clipboard v0.1.4
 	github.com/ebitengine/oto/v3 v3.1.0
 	github.com/gen2brain/beeep v0.0.0-20230907135156-1a38885a97fc
