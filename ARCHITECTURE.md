@@ -204,35 +204,41 @@ type AppState struct {
 **Responsibilities:**
 - Audio recording via malgo
 - Audio playback (success/error sounds)
-- Real-time audio level calculation
-- Voice Activity Detection (VAD)
+- Real-time audio level calculation (RMS, for the visualizer)
 
 **Key Functions:**
 - `NewRecorder()`: Initialize audio recorder
 - `Recorder.Start()`: Begin capture
 - `Recorder.Stop()`: Stop and return audio buffer
 - `CalculateBarHeights()`: Compute visualizer levels
-- `ApplyVAD()`: Voice activity detection
+- `CalculateRMS()`: Per-frame RMS, used for the level meter
 
-**VAD Algorithm:**
-1. Split audio into frames
-2. Calculate RMS energy per frame
-3. Mark frames above a fixed energy threshold as speech
-4. Merge speech with padding and minimum-silence filtering
-5. Return concatenated speech segments
+Note: Voice Activity Detection is no longer performed in this package. It is
+delegated to the transcription library's Silero VAD (see below).
 
 ### internal/transcribe/ - Speech Recognition
 
 **Responsibilities:**
-- CTranslate2 model management
+- CTranslate2 model management (via `go-whisper-ct2` v1.2.0)
 - Model downloading from Hugging Face
 - Audio transcription
+- Voice Activity Detection (Silero v6 ONNX VAD)
 
 **Key Functions:**
 - `NewWorker()`: Initialize transcription worker
 - `Worker.Transcribe()`: Convert audio buffer to text
 - `ModelManager.DownloadModel()`: Fetch model from Hugging Face
 - `Worker.EnsureModelLoaded()`: Load/reload active model after config changes
+- `ExtractVADModel()`: Materialize the embedded Silero VAD model to the cache dir
+
+**Voice Activity Detection:**
+When `VADEnabled` is set, transcription passes `WithVADFilter(true)` plus
+`WithVADModel(<silero_vad_v6.onnx>)` to the library, which runs faster-whisper's
+Silero v6 VAD to trim non-speech. The Silero model is bundled (`assets/`,
+embedded via `//go:embed`) and extracted to the cache dir at startup because
+onnxruntime requires a real file path. If the model can't be materialized, the
+library falls back to its built-in energy VAD. Long dictations (>30s) benefit
+automatically from the v1.2.0 long-audio seek logic.
 
 **Supported Models:**
 - tiny (~75MB, fast, less accurate)
@@ -439,7 +445,9 @@ go build -ldflags="-s -w" -o voice-to-clipboard .
 
 ### Dependencies
 
-**Runtime:** Go binary plus CTranslate2 runtime libraries (`libwhisper_ct2` and CT2 dependencies).
+**Runtime:** Go binary plus CTranslate2 runtime libraries (`libwhisper_ct2`, the
+CTranslate2 libs, and `libonnxruntime` — required by the Silero v6 VAD). The
+bundle scripts allowlist `libonnxruntime` so it ships alongside the CT2 libs.
 
 **Build-time:**
 - Go 1.23+
@@ -483,6 +491,8 @@ go build -ldflags="-s -w" -o voice-to-clipboard .
 - Some users want manual control (long recordings)
 - VAD can be too aggressive in noisy environments
 - Toggle allows flexibility
+- When enabled, VAD is the library's Silero v6 ONNX model (faster-whisper
+  parity), not a Go-side energy heuristic
 
 ### Why Full-Buffer Transcription?
 

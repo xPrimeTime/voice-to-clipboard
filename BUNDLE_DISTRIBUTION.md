@@ -30,7 +30,8 @@ Artifact:
 
 Contents:
 - `voice-to-clipboard/voice-to-clipboard`
-- `voice-to-clipboard/lib/*` (bundled runtime libs)
+- `voice-to-clipboard/lib/*` (bundled runtime libs, incl. `libwhisper_ct2`, the
+  CTranslate2 libs, and `libonnxruntime` for the Silero v6 VAD)
 - `voice-to-clipboard/run.sh`
 - `voice-to-clipboard/run-portable.sh`
 - `voice-to-clipboard/README.md`
@@ -45,7 +46,8 @@ Artifact:
 
 Contents:
 - `voice-to-clipboard/voice-to-clipboard.exe`
-- `voice-to-clipboard/*.dll` (bundled runtime DLLs)
+- `voice-to-clipboard/*.dll` (bundled runtime DLLs, incl. `whisper_ct2`, the
+  CTranslate2 libs, and `onnxruntime` for the Silero v6 VAD)
 - `voice-to-clipboard/run-portable.bat`
 - `voice-to-clipboard/README.txt`
 - `voice-to-clipboard/THIRD_PARTY_NOTICES.txt`

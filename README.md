@@ -32,7 +32,12 @@ Local voice-to-text transcription with automatic clipboard integration. Go deskt
 #### Prerequisites
 - Go 1.23 or later
 - CTranslate2 library (for transcription)
-- libwhisper_ct2.so (from go-whisper-ct2)
+- libwhisper_ct2.so (from go-whisper-ct2 v1.2.0)
+- libonnxruntime.so (for the bundled Silero v6 VAD) — resolved via the
+  go-whisper-ct2 install/rpath; bundled by the distribution scripts
+
+The Silero VAD model (`assets/silero_vad_v6.onnx`) is embedded in the binary and
+extracted to the cache dir on first run, so no separate VAD download is needed.
 
 **Linux**:
 ```bash
