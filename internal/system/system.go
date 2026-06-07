@@ -74,20 +74,13 @@ func ShowWindow(windowTitle string) error {
 			return err
 		}
 
-		// Hyprland floating workaround: When a window moves from special workspace,
-		// it may lose its floating state. togglefloating returns "0" if the window
-		// was made tiled (floating disabled) or "1" if made floating. If we get "0",
-		// we need to toggle again to restore floating state.
-		cmd = exec.Command("hyprctl", "dispatch", "togglefloating", classArg)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			logger.Debug("hyprctl togglefloating failed", "error", err)
-		} else if strings.Contains(string(output), "0") {
-			// Window became tiled, toggle again to make it floating
-			cmd = exec.Command("hyprctl", "dispatch", "togglefloating", classArg)
-			if err := cmd.Run(); err != nil {
-				logger.Debug("hyprctl togglefloating restore failed", "error", err)
-			}
+		// Moving a window out of the special workspace can drop its floating
+		// state. Force it floating deterministically with setfloating: a blind
+		// togglefloating would tile an already-floating window, which on Hyprland
+		// expands to fill the whole screen (the "fullscreen overlay" bug).
+		cmd = exec.Command("hyprctl", "dispatch", "setfloating", classArg)
+		if err := cmd.Run(); err != nil {
+			logger.Debug("hyprctl setfloating failed", "error", err)
 		}
 
 		// Focus the window (non-critical, log but don't fail)
