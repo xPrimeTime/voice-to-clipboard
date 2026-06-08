@@ -136,6 +136,13 @@ copy_so_family() {
   base="$(basename "$source")"
   prefix="${base%%.so*}.so"
 
+  # If the dep already resolves to the bundle dir (recursive collection can hit
+  # an already-copied lib), there's nothing to copy and cp would error on a
+  # same-file copy under set -e.
+  if [[ "$dir" -ef "$LIB_DIR" ]]; then
+    return 0
+  fi
+
   local key="$dir/$prefix"
   if [[ -n "${COPIED_FAMILIES[$key]:-}" ]]; then
     return 0
@@ -154,7 +161,11 @@ copy_so_family() {
 should_bundle_dep() {
   local base="$1"
   case "$base" in
-    libwhisper_ct2.so*|libctranslate2.so*|libonnxruntime.so*|libmkl*.so*|libdnnl*.so*|libiomp*.so*|libomp.so*|libgomp.so*|libopenblas.so*|libtbb*.so*)
+    libwhisper_ct2.so*|libctranslate2.so*|libonnxruntime.so*|libmkl*.so*|libdnnl*.so*|libiomp*.so*|libomp.so*|libgomp.so*|libopenblas.so*|libtbb*.so*|libstdc++.so*|libgcc_s.so*)
+      # libstdc++/libgcc_s are bundled because the C++ libs (e.g. ctranslate2)
+      # need a newer GLIBCXX than older distros ship (Ubuntu 22.04/Debian 12 are
+      # too old). Bundling the build host's newer, backward-compatible libstdc++
+      # lets the bundle run there too.
       return 0
       ;;
     *)
