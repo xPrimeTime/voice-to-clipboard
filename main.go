@@ -256,8 +256,13 @@ func main() {
 		go func() {
 			err := <-downloadDone
 			if err != nil {
+				// Don't crash: keep the app running so the user can retry from
+				// the tray once their connection is back. Recording without a
+				// model degrades gracefully (transcription reports an error).
 				logger.Error("Failed to download model", "error", err)
-				log.Fatal("Cannot start without a model. Please ensure internet connection.")
+				system.ShowNotification(ui.AppName, "Model download failed. Check your connection, then pick a model from the tray.")
+				app.ui.SetState(ui.StateIdle)
+				return
 			}
 
 			cfg.SetModel("base")

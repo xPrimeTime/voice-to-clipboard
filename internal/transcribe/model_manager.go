@@ -71,6 +71,18 @@ func (m *ModelManager) DownloadModel(modelName string, onProgress ProgressCallba
 		return fmt.Errorf("failed to create model directory: %w", err)
 	}
 
+	// Remove the partial download on failure so retries start clean and an
+	// incomplete dir is never mistaken for a usable model. DownloadModel is only
+	// called when the model isn't already valid, so this can't delete a good one.
+	success := false
+	defer func() {
+		if !success {
+			if err := os.RemoveAll(modelPath); err != nil {
+				logger.Warn("Failed to clean up partial model download", "path", modelPath, "error", err)
+			}
+		}
+	}()
+
 	logger.Info("Downloading model from HuggingFace", "repo", modelInfo.URL, "dest", modelPath)
 
 	// Download required files plus vocabulary (which may be .json or .txt)
@@ -130,6 +142,7 @@ func (m *ModelManager) DownloadModel(modelName string, onProgress ProgressCallba
 		onProgress(1.0)
 	}
 
+	success = true
 	logger.Info("Model downloaded successfully", "model", modelName, "path", modelPath)
 	return nil
 }
@@ -152,31 +165,39 @@ func (m *ModelManager) downloadFile(url, destPath string, onDelta func(n int)) e
 		return fmt.Errorf("server returned status %d for %s", resp.StatusCode, url)
 	}
 
-	file, err := os.Create(destPath)
+	// Stream to a temp file and rename on success, so an interrupted download
+	// never leaves a partial file that looks complete.
+	tmpPath := destPath + ".part"
+	file, err := os.Create(tmpPath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer os.Remove(tmpPath) // harmless no-op once renamed
 
 	buffer := make([]byte, 32*1024) // 32KB buffer
-	for {
-		n, err := resp.Body.Read(buffer)
-		if n > 0 {
-			if _, writeErr := file.Write(buffer[:n]); writeErr != nil {
-				return writeErr
+	writeErr := func() error {
+		defer file.Close()
+		for {
+			n, rerr := resp.Body.Read(buffer)
+			if n > 0 {
+				if _, werr := file.Write(buffer[:n]); werr != nil {
+					return werr
+				}
+				if onDelta != nil {
+					onDelta(n)
+				}
 			}
-			if onDelta != nil {
-				onDelta(n)
+			if rerr == io.EOF {
+				return nil
+			}
+			if rerr != nil {
+				return rerr
 			}
 		}
-
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
+	}()
+	if writeErr != nil {
+		return writeErr
 	}
 
-	return nil
+	return os.Rename(tmpPath, destPath)
 }
