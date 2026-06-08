@@ -70,7 +70,12 @@ mkdir -p "$LIB_DIR" "$PROJECT_DIR/$OUTPUT_DIR"
 
 add_search_dir() {
   local d="$1"
-  [[ -n "$d" && -d "$d" ]] && SEARCH_DIRS+=("$d")
+  # Use an if-block (not `&& ...`) so a missing dir doesn't return non-zero and
+  # trip `set -e` — several defaults below are Debian-only paths absent on
+  # Arch/Fedora/etc.
+  if [[ -n "$d" && -d "$d" ]]; then
+    SEARCH_DIRS+=("$d")
+  fi
 }
 
 declare -a SEARCH_DIRS=()
@@ -206,6 +211,16 @@ fi
 
 echo "[3/6] Patching binary RPATH"
 patchelf --set-rpath '$ORIGIN/lib' "$BIN_PATH"
+
+# Repoint every bundled library to its siblings ($ORIGIN). Libraries like
+# libwhisper_ct2 bake an absolute build-time RPATH (the go-whisper-ct2 .deps
+# dirs) for their own deps (onnxruntime/ctranslate2); without this, those
+# transitive deps resolve from the build machine and the bundle breaks on a
+# clean one. Patch only real ELF files, not the version symlinks.
+for so in "$LIB_DIR"/*.so*; do
+  [[ -f "$so" && ! -L "$so" ]] || continue
+  patchelf --set-rpath '$ORIGIN' "$so" 2>/dev/null || true
+done
 
 echo "[4/6] Writing launchers and notices"
 cat > "$APP_DIR/run.sh" <<'RUN'
