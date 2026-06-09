@@ -49,3 +49,6 @@ temp/
 
 # Distribution bundles
 dist/
+
+# Codex scratch file (intentionally untracked)
+.codex
