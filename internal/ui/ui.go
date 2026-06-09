@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"runtime"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"gioui.org/font"
 	"gioui.org/io/key"
 	"gioui.org/io/pointer"
+	giosystem "gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -160,8 +162,15 @@ func (u *UI) SetDownloadProgress(progress float64) {
 	}
 }
 
-// Hide hides the window using compositor commands (Hyprland/wmctrl)
+// Hide hides the window using compositor commands (Hyprland/wmctrl).
+// On Windows there is no compositor hide and Gio v0.9 exposes no
+// minimize/hide action, so this is a no-op: blanking the frame would
+// leave a dead black window on screen, which is worse than staying visible.
 func (u *UI) Hide() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+
 	u.hiddenMu.Lock()
 	u.isHidden = true
 	u.hiddenMu.Unlock()
@@ -172,6 +181,10 @@ func (u *UI) Hide() {
 
 // Show shows the window using compositor commands
 func (u *UI) Show() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+
 	u.hiddenMu.Lock()
 	wasHidden := u.isHidden
 	u.isHidden = false
@@ -265,9 +278,15 @@ func (u *UI) layout(gtx layout.Context) layout.Dimensions {
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return u.layoutMicButton(gtx, state)
 			}),
-			// Push the visualizer to the right edge
+			// Push the visualizer to the right edge. The gap doubles as a
+			// drag handle so the frameless window can be moved without
+			// compositor shortcuts (required on Windows, convenient elsewhere).
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return layout.Dimensions{Size: image.Point{X: gtx.Constraints.Min.X}}
+				sz := image.Point{X: gtx.Constraints.Max.X, Y: gtx.Constraints.Max.Y}
+				area := clip.Rect(image.Rectangle{Max: sz}).Push(gtx.Ops)
+				giosystem.ActionInputOp(giosystem.ActionMove).Add(gtx.Ops)
+				area.Pop()
+				return layout.Dimensions{Size: sz}
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return u.layoutVisualizer(gtx, state)
@@ -385,6 +404,12 @@ func (u *UI) layoutVisualizer(gtx layout.Context, state State) layout.Dimensions
 
 	t := animSeconds(gtx)
 
+	// The visualizer is not interactive, so it also serves as a drag handle
+	width := 4*barWidth + 3*gap
+	area := clip.Rect(image.Rect(0, 0, width, containerHeight)).Push(gtx.Ops)
+	giosystem.ActionInputOp(giosystem.ActionMove).Add(gtx.Ops)
+	area.Pop()
+
 	for i := 0; i < 4; i++ {
 		level := heights[i]
 		barColor := ColorInactive
@@ -418,7 +443,6 @@ func (u *UI) layoutVisualizer(gtx layout.Context, state State) layout.Dimensions
 		paint.FillShape(gtx.Ops, barColor, bar.Op(gtx.Ops))
 	}
 
-	width := 4*barWidth + 3*gap
 	return layout.Dimensions{Size: image.Point{X: width, Y: containerHeight}}
 }
 

@@ -3,6 +3,7 @@ package system
 import (
 	"encoding/json"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,8 +42,14 @@ func ShowNotification(title, message string) {
 	}
 }
 
-// HideWindow hides the window using compositor-specific commands
+// HideWindow hides the window using compositor-specific commands.
+// No-op on Windows: there is no compositor command to run, and spawning
+// missing hyprctl/wmctrl processes just errors and logs noise.
 func HideWindow(windowTitle string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	// Try Hyprland first
 	if isHyprland() {
 		// Use class name instead of title for more reliable matching
@@ -64,8 +71,13 @@ func HideWindow(windowTitle string) error {
 	return nil
 }
 
-// ShowWindow shows the window using compositor-specific commands
+// ShowWindow shows the window using compositor-specific commands.
+// No-op on Windows (see HideWindow).
 func ShowWindow(windowTitle string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	// Try Hyprland first
 	if isHyprland() {
 		classArg := "class:" + WindowClass
@@ -143,6 +155,11 @@ func EnsureFloating() {
 // isHyprland checks if running under Hyprland compositor (cached)
 func isHyprland() bool {
 	hyprlandCheckOnce.Do(func() {
+		if runtime.GOOS != "linux" {
+			result := false
+			isHyprlandCached = &result
+			return
+		}
 		cmd := exec.Command("hyprctl", "version")
 		output, err := cmd.Output()
 		result := err == nil && strings.Contains(string(output), "Hyprland")

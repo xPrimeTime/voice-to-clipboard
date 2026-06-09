@@ -181,7 +181,7 @@ collect_ldd_paths() {
 
 echo "Building Linux bundle ${VERSION}..."
 echo "[1/6] Building application binary"
-go build -tags novulkan -o "$BIN_PATH" .
+go build -tags novulkan -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "$BIN_PATH" .
 
 WHISPER_LIB="$(find_first_match 'libwhisper_ct2.so*' || true)"
 if [[ -z "$WHISPER_LIB" ]]; then

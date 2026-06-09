@@ -26,6 +26,9 @@ import (
 //go:embed assets
 var assetsDir embed.FS
 
+// version is stamped by the release scripts via -ldflags "-X main.version=..."
+var version = "dev"
+
 // App holds the application state
 type App struct {
 	ui       *ui.UI
@@ -155,7 +158,13 @@ func main() {
 	quitFlag := flag.Bool("quit", false, "Quit the running instance")
 	showFlag := flag.Bool("show", false, "Show the running instance's window")
 	hideFlag := flag.Bool("hide", false, "Hide the running instance's window")
+	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println(ui.AppName, version)
+		os.Exit(0)
+	}
 
 	switch {
 	case *toggleFlag:
@@ -184,7 +193,7 @@ func main() {
 	}
 	defer logger.Close()
 
-	logger.Info("App starting", "model", cfg.GetModel())
+	logger.Info("App starting", "version", version, "model", cfg.GetModel())
 
 	// Pin CPU inference to physical cores (unless OMP_NUM_THREADS is set) so the
 	// float32 Whisper encoder doesn't oversubscribe SMT siblings. Must run before

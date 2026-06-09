@@ -34,7 +34,8 @@ Write-Host "[1/5] Building Windows binary" -ForegroundColor Yellow
 $env:CGO_ENABLED = "1"
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
-go build -tags novulkan -o (Join-Path $AppDir "voice-to-clipboard.exe") .
+# -H=windowsgui: GUI subsystem, otherwise every launch opens a console window
+go build -tags novulkan -trimpath -ldflags "-s -w -H=windowsgui -X main.version=$Version" -o (Join-Path $AppDir "voice-to-clipboard.exe") .
 
 $searchDirs = New-Object System.Collections.Generic.List[string]
 function Add-SearchDir {
