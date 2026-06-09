@@ -1,16 +1,21 @@
 // Package ui implements the Voice to Clipboard UI using Gio.
-// 120×40dp frameless window with mic button and 4-bar audio visualizer.
+// 120×40dp frameless window with a circular mic button and a 4-bar,
+// center-grown audio visualizer.
 package ui
 
 import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"sync"
+	"time"
 
 	"gioui.org/app"
+	"gioui.org/f32"
 	"gioui.org/font"
 	"gioui.org/io/key"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -20,7 +25,6 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
-	"voice-to-clipboard/internal/audio"
 	"voice-to-clipboard/internal/system"
 )
 
@@ -33,13 +37,16 @@ const (
 	WindowHeight = 40
 )
 
-// Colors matching Python GTK4 CSS
+// Palette
 var (
-	ColorBackground = color.NRGBA{R: 26, G: 26, B: 26, A: 255}    // #1a1a1a
-	ColorWhite      = color.NRGBA{R: 255, G: 255, B: 255, A: 255} // #ffffff
-	ColorInactive   = color.NRGBA{R: 68, G: 68, B: 68, A: 255}    // #444444
-	ColorBlue       = color.NRGBA{R: 74, G: 144, B: 217, A: 255}  // #4a90d9
-	ColorHover      = color.NRGBA{R: 255, G: 255, B: 255, A: 38}  // rgba(255,255,255,0.15)
+	ColorBackground   = color.NRGBA{R: 0x16, G: 0x16, B: 0x18, A: 0xFF} // near-black, hint of blue
+	ColorSurface      = color.NRGBA{R: 0x26, G: 0x26, B: 0x2B, A: 0xFF} // idle button fill
+	ColorSurfaceHover = color.NRGBA{R: 0x34, G: 0x34, B: 0x3A, A: 0xFF}
+	ColorGlyph        = color.NRGBA{R: 0xE8, G: 0xE8, B: 0xEC, A: 0xFF} // soft white
+	ColorWhite        = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+	ColorInactive     = color.NRGBA{R: 0x3E, G: 0x3E, B: 0x45, A: 0xFF} // resting bars
+	ColorRed          = color.NRGBA{R: 0xE5, G: 0x48, B: 0x4D, A: 0xFF} // recording
+	ColorBlue         = color.NRGBA{R: 0x5C, G: 0x9C, B: 0xF5, A: 0xFF} // transcribing
 )
 
 // State represents the current application state
@@ -89,7 +96,6 @@ func New() *UI {
 // Run starts the UI event loop (blocks)
 func (u *UI) Run() error {
 	u.window = new(app.Window)
-	// Adjusted dimensions for better match
 	u.window.Option(
 		app.Title(AppName),
 		app.Size(unit.Dp(WindowWidth), unit.Dp(WindowHeight)),
@@ -222,226 +228,272 @@ func (u *UI) handleInput(gtx layout.Context) {
 	}
 }
 
+// animSeconds returns wall-clock time in seconds for driving animations.
+func animSeconds(gtx layout.Context) float64 {
+	return float64(gtx.Now.UnixNano()) / float64(time.Second)
+}
+
 // layout draws the entire UI
 func (u *UI) layout(gtx layout.Context) layout.Dimensions {
 	// Fill background
 	paint.FillShape(gtx.Ops, ColorBackground,
 		clip.Rect{Max: gtx.Constraints.Max}.Op())
 
-	// Check if we're in download state
 	u.stateMu.RLock()
 	state := u.state
 	u.stateMu.RUnlock()
+
+	// Recording pulse and transcribing wave are time-driven; keep frames coming.
+	if state == StateRecording || state == StateTranscribing {
+		gtx.Execute(op.InvalidateCmd{})
+	}
 
 	if state == StateDownloading {
 		return u.layoutDownloadProgress(gtx)
 	}
 
-	// Match Python: 4px vertical, 10px horizontal padding
 	return layout.Inset{
-		Top:    unit.Dp(4),
-		Bottom: unit.Dp(4),
-		Left:   unit.Dp(10),
-		Right:  unit.Dp(10),
+		Top:    unit.Dp(6),
+		Bottom: unit.Dp(6),
+		Left:   unit.Dp(12),
+		Right:  unit.Dp(12),
 	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{
 			Axis:      layout.Horizontal,
 			Alignment: layout.Middle,
 		}.Layout(gtx,
-			// Mic button
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return u.layoutMicButton(gtx)
+				return u.layoutMicButton(gtx, state)
 			}),
-			// Spacer (10px box spacing + 6px visualizer margin = 16px total)
-			layout.Rigid(layout.Spacer{Width: unit.Dp(16)}.Layout),
-			// Visualizer bars
+			// Push the visualizer to the right edge
+			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+				return layout.Dimensions{Size: image.Point{X: gtx.Constraints.Min.X}}
+			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return u.layoutVisualizer(gtx)
+				return u.layoutVisualizer(gtx, state)
 			}),
 		)
 	})
 }
 
-// layoutMicButton draws the rounded rectangle/pill mic button (matches Python design)
-func (u *UI) layoutMicButton(gtx layout.Context) layout.Dimensions {
-	// Rounded rectangle (not full pill) - wider and less rounded
-	width := gtx.Dp(unit.Dp(36))
-	height := gtx.Dp(unit.Dp(28))
-	borderRadius := float32(gtx.Dp(unit.Dp(6))) // Less rounded - 6px instead of 10px
-	borderWidth := gtx.Dp(unit.Dp(2))           // 2px border
-
-	u.stateMu.RLock()
-	state := u.state
-	u.stateMu.RUnlock()
+// layoutMicButton draws the circular mic button with a vector microphone glyph
+func (u *UI) layoutMicButton(gtx layout.Context, state State) layout.Dimensions {
+	size := gtx.Dp(unit.Dp(28))
 
 	// Determine colors based on state
-	var fillColor, borderColor color.NRGBA
+	var fillColor, glyphColor color.NRGBA
 	switch state {
 	case StateRecording:
-		fillColor = ColorWhite
-		borderColor = ColorWhite
+		fillColor = ColorRed
+		glyphColor = ColorWhite
 	case StateTranscribing:
-		fillColor = ColorBlue
-		borderColor = ColorBlue
+		fillColor = ColorSurface
+		glyphColor = ColorBlue
 	default:
-		fillColor = ColorBackground
-		borderColor = ColorWhite
-	}
-
-	// Hover effect (15% white overlay)
-	if u.micBtn.Hovered() && state == StateIdle {
-		fillColor = color.NRGBA{R: 64, G: 64, B: 64, A: 255} // ~15% lighter than #1a1a1a
+		fillColor = ColorSurface
+		glyphColor = ColorGlyph
+		if u.micBtn.Hovered() {
+			fillColor = ColorSurfaceHover
+			glyphColor = ColorWhite
+		}
 	}
 
 	return u.micBtn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		// Draw outer rounded rect (border)
-		outerRect := image.Rect(0, 0, width, height)
-		drawRoundedRect(gtx.Ops, outerRect, borderRadius, borderColor)
+		cx := float32(size) / 2
+		cy := float32(size) / 2
 
-		// Draw inner rounded rect (fill)
-		innerRect := image.Rect(borderWidth, borderWidth, width-borderWidth, height-borderWidth)
-		innerRadius := borderRadius - float32(borderWidth)
-		if innerRadius < 0 {
-			innerRadius = 0
+		// Pulse ring while recording: expands and fades on a 1.4s cycle.
+		// Drawn before the button so it sits underneath, and outside any
+		// clip so it can extend past the button bounds.
+		if state == StateRecording {
+			phase := math.Mod(animSeconds(gtx), 1.4) / 1.4
+			grow := float32(phase) * gtx.Metric.PxPerDp * 4
+			alpha := uint8(90 * (1 - phase))
+			ringR := cx + grow
+			ring := ColorRed
+			ring.A = alpha
+			strokeCircle(gtx.Ops, f32.Pt(cx, cy), ringR, 1.5*gtx.Metric.PxPerDp, ring)
 		}
-		drawRoundedRect(gtx.Ops, innerRect, innerRadius, fillColor)
 
-		return layout.Dimensions{Size: image.Point{X: width, Y: height}}
+		// Button circle
+		circle := clip.Ellipse(image.Rect(0, 0, size, size))
+		paint.FillShape(gtx.Ops, fillColor, circle.Op(gtx.Ops))
+
+		u.drawMicGlyph(gtx, glyphColor, cx, cy)
+
+		// Pointer cursor over the button
+		area := clip.Rect(image.Rect(0, 0, size, size)).Push(gtx.Ops)
+		pointer.CursorPointer.Add(gtx.Ops)
+		area.Pop()
+
+		return layout.Dimensions{Size: image.Point{X: size, Y: size}}
 	})
 }
 
-// layoutVisualizer draws the 4 audio level bars
-func (u *UI) layoutVisualizer(gtx layout.Context) layout.Dimensions {
+// drawMicGlyph draws a microphone (capsule, cradle arc, stem, base) centered
+// at (cx, cy). Sizes are in dp, converted via the context's scale factor.
+func (u *UI) drawMicGlyph(gtx layout.Context, col color.NRGBA, cx, cy float32) {
+	s := gtx.Metric.PxPerDp
+	stroke := 1.6 * s
+
+	// Capsule body: 6.5×9dp, sitting above center
+	capW := 6.5 * s
+	capTop := cy - 7.5*s
+	capBot := cy + 1.5*s
+	capR := int(capW / 2)
+	capsule := clip.RRect{
+		Rect: image.Rect(int(cx-capW/2), int(capTop), int(cx+capW/2), int(capBot)),
+		NE:   capR, NW: capR, SE: capR, SW: capR,
+	}
+	paint.FillShape(gtx.Ops, col, capsule.Op(gtx.Ops))
+
+	// Cradle: half-circle arc under the capsule, open side up
+	arcR := 5 * s
+	arcCy := cy + 0.5*s
+	var p clip.Path
+	p.Begin(gtx.Ops)
+	p.MoveTo(f32.Pt(cx-arcR, arcCy))
+	// Sweep from the left point through the bottom to the right point
+	p.Arc(f32.Pt(arcR, 0), f32.Pt(arcR, 0), -math.Pi)
+	paint.FillShape(gtx.Ops, col, clip.Stroke{Path: p.End(), Width: stroke}.Op())
+
+	// Stem and base
+	var stem clip.Path
+	stem.Begin(gtx.Ops)
+	stem.MoveTo(f32.Pt(cx, arcCy+arcR))
+	stem.LineTo(f32.Pt(cx, cy+7.5*s))
+	paint.FillShape(gtx.Ops, col, clip.Stroke{Path: stem.End(), Width: stroke}.Op())
+
+	var base clip.Path
+	base.Begin(gtx.Ops)
+	base.MoveTo(f32.Pt(cx-3.25*s, cy+7.5*s))
+	base.LineTo(f32.Pt(cx+3.25*s, cy+7.5*s))
+	paint.FillShape(gtx.Ops, col, clip.Stroke{Path: base.End(), Width: stroke}.Op())
+}
+
+// layoutVisualizer draws the 4 audio level bars, grown from the vertical center
+func (u *UI) layoutVisualizer(gtx layout.Context, state State) layout.Dimensions {
 	u.barMu.RLock()
 	heights := u.barHeights
 	u.barMu.RUnlock()
 
-	u.stateMu.RLock()
-	state := u.state
-	u.stateMu.RUnlock()
-
-	// Wider bars and taller container for better visibility
-	barWidth := gtx.Dp(unit.Dp(8))
-	minHeight := gtx.Dp(unit.Dp(audio.VisualizerBarMinHeight))
-	maxHeight := gtx.Dp(unit.Dp(audio.VisualizerBarMaxHeight))
+	barWidth := gtx.Dp(unit.Dp(5))
+	gap := gtx.Dp(unit.Dp(6))
+	minHeight := gtx.Dp(unit.Dp(5))
+	maxHeight := gtx.Dp(unit.Dp(24))
 	containerHeight := gtx.Dp(unit.Dp(28))
 
-	return layout.Flex{
-		Axis:      layout.Horizontal,
-		Alignment: layout.End, // Bars aligned to bottom of their container
-	}.Layout(gtx,
-		// First bar with left margin (2px)
-		layout.Rigid(layout.Spacer{Width: unit.Dp(2)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return u.drawBar(gtx, heights[0], barWidth, minHeight, maxHeight, containerHeight, state)
-		}),
-		// 4dp spacing between bars (2px right + 2px left margins)
-		layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return u.drawBar(gtx, heights[1], barWidth, minHeight, maxHeight, containerHeight, state)
-		}),
-		layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return u.drawBar(gtx, heights[2], barWidth, minHeight, maxHeight, containerHeight, state)
-		}),
-		layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return u.drawBar(gtx, heights[3], barWidth, minHeight, maxHeight, containerHeight, state)
-		}),
-		layout.Rigid(layout.Spacer{Width: unit.Dp(2)}.Layout),
-	)
-}
+	t := animSeconds(gtx)
 
-// drawBar draws a single visualizer bar
-func (u *UI) drawBar(gtx layout.Context, level float32, width, minH, maxH, containerH int, state State) layout.Dimensions {
-	// Calculate height based on level (0.0 to 1.0)
-	height := minH + int(level*float32(maxH-minH))
-	if height < minH {
-		height = minH
-	}
-	if height > maxH {
-		height = maxH
+	for i := 0; i < 4; i++ {
+		level := heights[i]
+		barColor := ColorInactive
+
+		switch state {
+		case StateRecording:
+			// Brightness follows the level
+			barColor = lerpColor(ColorInactive, ColorWhite, clamp01((level-0.15)/0.5))
+		case StateTranscribing:
+			// Levels are gone; run a gentle blue wave instead
+			level = float32(0.25 + 0.45*(0.5+0.5*math.Sin(t*6-float64(i)*0.9)))
+			barColor = ColorBlue
+		default:
+			level = 0 // resting dots
+		}
+
+		height := minHeight + int(level*float32(maxHeight-minHeight))
+		if height < minHeight {
+			height = minHeight
+		}
+		if height > maxHeight {
+			height = maxHeight
+		}
+
+		x := i * (barWidth + gap)
+		y := (containerHeight - height) / 2
+		bar := clip.RRect{
+			Rect: image.Rect(x, y, x+barWidth, y+height),
+			NE:   barWidth / 2, NW: barWidth / 2, SE: barWidth / 2, SW: barWidth / 2,
+		}
+		paint.FillShape(gtx.Ops, barColor, bar.Op(gtx.Ops))
 	}
 
-	// Determine color - white when active (height > 5px), gray otherwise
-	barColor := ColorInactive
-	if state == StateRecording && level > 0.15 {
-		barColor = ColorWhite
-	}
-
-	// Draw rounded rectangle (3px radius)
-	radius := float32(gtx.Dp(unit.Dp(3)))
-	rect := image.Rect(0, 0, width, height)
-
-	// Offset to align to bottom of container
-	yOffset := containerH - height
-	defer op.Offset(image.Point{X: 0, Y: yOffset}).Push(gtx.Ops).Pop()
-
-	drawRoundedRect(gtx.Ops, rect, radius, barColor)
-
-	return layout.Dimensions{Size: image.Point{X: width, Y: containerH}}
+	width := 4*barWidth + 3*gap
+	return layout.Dimensions{Size: image.Point{X: width, Y: containerHeight}}
 }
 
 // layoutDownloadProgress draws the download progress bar with percentage
 func (u *UI) layoutDownloadProgress(gtx layout.Context) layout.Dimensions {
-	// Get current progress
 	u.downloadProgressMu.RLock()
 	progress := u.downloadProgress
 	u.downloadProgressMu.RUnlock()
 
-	// Center everything vertically and horizontally
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{
 			Axis:      layout.Vertical,
 			Alignment: layout.Middle,
-			Spacing:   layout.SpaceEvenly,
 		}.Layout(gtx,
 			// Progress bar
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				// Progress bar dimensions
-				barWidth := gtx.Dp(unit.Dp(100))
-				barHeight := gtx.Dp(unit.Dp(8))
+				barWidth := gtx.Dp(unit.Dp(96))
+				barHeight := gtx.Dp(unit.Dp(6))
+				radius := barHeight / 2
 
-				// Draw background bar (gray)
-				bgRect := image.Rect(0, 0, barWidth, barHeight)
-				drawRoundedRect(gtx.Ops, bgRect, 4, ColorInactive)
+				track := clip.RRect{
+					Rect: image.Rect(0, 0, barWidth, barHeight),
+					NE:   radius, NW: radius, SE: radius, SW: radius,
+				}
+				paint.FillShape(gtx.Ops, ColorSurface, track.Op(gtx.Ops))
 
-				// Draw progress fill (blue)
 				fillWidth := int(float64(barWidth) * progress)
-				if fillWidth > 0 {
-					fillRect := image.Rect(0, 0, fillWidth, barHeight)
-					drawRoundedRect(gtx.Ops, fillRect, 4, ColorBlue)
+				if fillWidth > barHeight { // keep the capsule shape intact
+					fill := clip.RRect{
+						Rect: image.Rect(0, 0, fillWidth, barHeight),
+						NE:   radius, NW: radius, SE: radius, SW: radius,
+					}
+					paint.FillShape(gtx.Ops, ColorBlue, fill.Op(gtx.Ops))
 				}
 
 				return layout.Dimensions{Size: image.Point{X: barWidth, Y: barHeight}}
 			}),
-			// Spacing
 			layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 			// Percentage text
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				percentText := fmt.Sprintf("%d%%", int(progress*100))
-
-				// Create label with white color
 				label := material.Label(u.theme, unit.Sp(10), percentText)
-				label.Color = ColorWhite
+				label.Color = ColorGlyph
 				label.Alignment = text.Middle
-				label.Font.Weight = font.Bold
-
+				label.Font.Weight = font.Medium
 				return label.Layout(gtx)
 			}),
 		)
 	})
 }
 
-// drawRoundedRect draws a filled rounded rectangle
-func drawRoundedRect(ops *op.Ops, rect image.Rectangle, radius float32, col color.NRGBA) {
-	r := int(radius)
-	rr := clip.RRect{
-		Rect: rect,
-		NE:   r,
-		NW:   r,
-		SE:   r,
-		SW:   r,
+// strokeCircle strokes a circle outline centered at c with radius r.
+func strokeCircle(ops *op.Ops, c f32.Point, r, width float32, col color.NRGBA) {
+	circle := clip.Ellipse(image.Rect(
+		int(c.X-r), int(c.Y-r),
+		int(c.X+r), int(c.Y+r),
+	))
+	paint.FillShape(ops, col, clip.Stroke{Path: circle.Path(ops), Width: width}.Op())
+}
+
+func clamp01(v float32) float32 {
+	if v < 0 {
+		return 0
 	}
-	paint.FillShape(ops, col, rr.Op(ops))
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func lerpColor(a, b color.NRGBA, t float32) color.NRGBA {
+	return color.NRGBA{
+		R: uint8(float32(a.R) + (float32(b.R)-float32(a.R))*t),
+		G: uint8(float32(a.G) + (float32(b.G)-float32(a.G))*t),
+		B: uint8(float32(a.B) + (float32(b.B)-float32(a.B))*t),
+		A: uint8(float32(a.A) + (float32(b.A)-float32(a.A))*t),
+	}
 }
