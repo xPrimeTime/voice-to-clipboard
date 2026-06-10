@@ -1,5 +1,8 @@
 # Releasing
 
+> **Status:** v0.1.0 (Linux amd64) shipped 2026-06-10 —
+> https://github.com/xPrimeTime/voice-to-clipboard/releases/tag/v0.1.0
+
 How a release of Voice to Clipboard is built and what must be checked before
 tagging. Releases are built **locally** with the bundle scripts — there is no
 release CI (the old `.github/workflows/release.yml` was a leftover from the
