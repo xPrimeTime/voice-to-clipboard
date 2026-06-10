@@ -91,7 +91,9 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
 - **No model checksum verification** — `config.ModelInfo.Checksum` is always
   `""` and never checked; downloads are trusted from HuggingFace over HTTPS.
 - **Test coverage** — only `internal/config` has tests (a race test for model
-  switching). Everything else is manually tested (checklist in CLAUDE.md).
+  switching). Everything else is manually tested before a release: window,
+  record/transcribe/clipboard flow, notifications, tray, model switching,
+  settings persistence, hide/show, and the IPC commands.
 - **Download progress is approximate** — byte-weighted against the model's
   approximate size, so it can hit 100% slightly early. Cosmetic.
 - **Windows runtime is untested** — the Go side cross-compiles and the bundle

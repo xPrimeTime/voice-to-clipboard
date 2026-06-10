@@ -52,3 +52,9 @@ dist/
 
 # Codex scratch file (intentionally untracked)
 .codex
+
+# Local development docs - kept out of the public repo (history was
+# stripped of these before first push)
+CLAUDE.md
+HANDOFF.md
+.github/copilot-instructions.md
