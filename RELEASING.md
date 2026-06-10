@@ -38,11 +38,16 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
    sudo docker run --rm -v /tmp/voice-to-clipboard:/app:ro archlinux:latest \
        bash -c "pacman -Sy --noconfirm alsa-lib libx11 libxtst libxcb \
                 libxkbcommon libxkbcommon-x11 libxcursor libxfixes libglvnd \
-                wayland zlib >/dev/null && /app/voice-to-clipboard --quit"
+                wayland zlib >/dev/null && \
+                ldd /app/voice-to-clipboard | grep 'not found' && echo FAIL \
+                || echo PASS"
    ```
 
-   `"No running instance found"` = every library loaded — pass. (GUI/audio/
-   tray can only be fully tested on a real desktop, not a container.)
+   `PASS` = every library resolved (the binary's rpath points at the
+   bundle's `lib/`). Don't *execute* the app in the container: gohook's C
+   constructor segfaults without an X display before `main()` runs (see
+   Known gaps), which looks like a failure but says nothing about the
+   libraries. GUI/audio/tray can only be fully tested on a real desktop.
 
    The container must satisfy the bundle's **glibc floor**, which the build
    script measures and prints (and writes into the bundle's README). Built on
@@ -70,6 +75,14 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
 
 ## Known gaps (accepted for v0.1, fix later)
 
+- **Segfault on systems with no X display.** gohook (the global-hotkey dep)
+  runs a C constructor at process load that crashes (SIGSEGV, exit 139) when
+  `XOpenDisplay` fails — before `main()`, so even `--version` dies. Affects
+  headless invocations (SSH, containers) and Wayland sessions without
+  XWayland. Normal desktops (X11, or Wayland with XWayland) are unaffected.
+  Candidate fix: drop gohook from Linux builds (or gate it behind a build
+  tag) — Wayland can't use it anyway and the IPC/compositor-keybind path is
+  the recommended one; gohook stays for Windows where it works.
 - **glibc floor is build-host dependent — currently 2.43 (Arch).** The
   native stack (libwhisper_ct2, OpenBLAS, CTranslate2, …) is compiled
   locally, so the bundle only runs on distros at least as new as the build
