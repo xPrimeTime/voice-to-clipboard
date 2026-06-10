@@ -216,7 +216,7 @@ func CalculateBarHeights(level float32, numBars int) []int {
 	normalized = math.Pow(normalized, 0.5)
 
 	for i := 0; i < numBars; i++ {
-		// Add random variation for organic feel (like Python version)
+		// Add random variation for organic feel
 		variation := 0.5 + (float64((i*7+int(level*1000))%10) * 0.1)
 		h := int(normalized * float64(VisualizerBarMaxHeight) * variation)
 

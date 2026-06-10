@@ -1,4 +1,4 @@
-# Voice to Clipboard - Go Edition
+# Voice to Clipboard
 
 Local voice-to-text transcription with automatic clipboard integration. Go desktop app with local Whisper/CTranslate2 transcription.
 
@@ -306,7 +306,6 @@ GOCACHE=/tmp/go-build go test ./...
 - UI built with [Gio](https://gioui.org/)
 - Transcription via [CTranslate2](https://github.com/OpenNMT/CTranslate2)
 - Go bindings: [go-whisper-ct2](https://github.com/xPrimeTime/go-whisper-ct2)
-- Based on the original Python version
 
 ## License
 
@@ -321,15 +320,3 @@ Contributions welcome! Please open an issue first to discuss changes.
 3. Make your changes
 4. Submit a pull request
 
-## Roadmap
-
-- [ ] GPU acceleration (CUDA/Metal)
-- [ ] Multiple language support
-- [ ] Settings UI
-- [ ] Hotword detection
-- [ ] Custom keybinds
-- [ ] Plugin system
-
----
-
-**Note**: This is a Go rewrite of the original Python version focused on native UI, local transcription, and simpler packaging.
