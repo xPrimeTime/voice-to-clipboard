@@ -36,7 +36,7 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
    ```bash
    tar -xzf dist/voice-to-clipboard-0.1.0-linux-amd64.tar.gz -C /tmp
    sudo docker run --rm -v /tmp/voice-to-clipboard:/app:ro archlinux:latest \
-       bash -c "pacman -Sy --noconfirm alsa-lib libx11 libxtst libxcb \
+       bash -c "pacman -Sy --noconfirm alsa-lib libx11 libxcb \
                 libxkbcommon libxkbcommon-x11 libxcursor libxfixes libglvnd \
                 wayland zlib >/dev/null && \
                 ldd /app/voice-to-clipboard | grep 'not found' && echo FAIL \
@@ -75,14 +75,6 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
 
 ## Known gaps (accepted for v0.1, fix later)
 
-- **Segfault on systems with no X display.** gohook (the global-hotkey dep)
-  runs a C constructor at process load that crashes (SIGSEGV, exit 139) when
-  `XOpenDisplay` fails — before `main()`, so even `--version` dies. Affects
-  headless invocations (SSH, containers) and Wayland sessions without
-  XWayland. Normal desktops (X11, or Wayland with XWayland) are unaffected.
-  Candidate fix: drop gohook from Linux builds (or gate it behind a build
-  tag) — Wayland can't use it anyway and the IPC/compositor-keybind path is
-  the recommended one; gohook stays for Windows where it works.
 - **glibc floor is build-host dependent — currently 2.43 (Arch).** The
   native stack (libwhisper_ct2, OpenBLAS, CTranslate2, …) is compiled
   locally, so the bundle only runs on distros at least as new as the build

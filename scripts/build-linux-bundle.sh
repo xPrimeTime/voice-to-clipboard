@@ -325,7 +325,7 @@ echo "  glibc floor: ${GLIBC_FLOOR:-unknown} (host distros need glibc >= this)"
   echo "- glibc >= ${GLIBC_FLOOR:-unknown} (build-host dependent; rebuild the native"
   echo "  stack on an older base image to lower it)"
   echo '- Desktop platform libraries (preinstalled on any desktop distro):'
-  echo '  ALSA (libasound2 / alsa-lib), X11 (libX11, libXtst, libxcb, libXcursor,'
+  echo '  ALSA (libasound2 / alsa-lib), X11 (libX11, libxcb, libXcursor,'
   echo '  libXfixes, xkbcommon), EGL (libegl1 / mesa), Wayland client libs, zlib.'
 } >> "$APP_DIR/README.md"
 

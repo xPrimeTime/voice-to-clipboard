@@ -1,18 +1,12 @@
+// Package hotkey provides an optional built-in global hotkey (Ctrl+Shift+R).
+//
+// The gohook-based listener is compiled in on Windows only. On Linux and
+// macOS the package reports unsupported: gohook is X11-only there (useless
+// on Wayland sessions), and its C constructor crashes the whole process at
+// load time when no X display is available (headless invocations, Wayland
+// without XWayland), so merely linking it is a liability. Users bind
+// `voice-to-clipboard --toggle` to a system keybind instead (see README).
 package hotkey
-
-import (
-	"voice-to-clipboard/internal/logger"
-
-	hook "github.com/robotn/gohook"
-)
-
-// keyCodes holds the platform-specific gohook raw key codes for the
-// Ctrl+Shift+R hotkey. Each platform file provides platformKeyCodes.
-type keyCodes struct {
-	leftCtrl, rightCtrl   uint16
-	leftShift, rightShift uint16
-	keyR                  uint16
-}
 
 // Manager handles global hotkey registration
 type Manager struct {
@@ -37,65 +31,9 @@ func (h *Manager) Stop() {
 	h.stop()
 }
 
-// stop signals the listener goroutine to exit
-func (h *Manager) stop() {
-	if h.stopChan != nil {
-		close(h.stopChan)
-		h.stopChan = nil
-	}
-}
-
-// start launches the listener goroutine. The event loop is shared across
-// platforms; only the raw key codes (platformKeyCodes) differ.
-func (h *Manager) start() error {
-	h.stopChan = make(chan struct{})
-
-	logger.Info("Starting global hotkey listener", "key", "Ctrl+Shift+R")
-
-	codes := platformKeyCodes
-	go func() {
-		evChan := hook.Start()
-		defer hook.End()
-
-		ctrlPressed := false
-		shiftPressed := false
-
-		for {
-			select {
-			case <-h.stopChan:
-				return
-			case ev := <-evChan:
-				switch ev.Kind {
-				case hook.KeyDown:
-					switch ev.Rawcode {
-					case codes.leftCtrl, codes.rightCtrl:
-						ctrlPressed = true
-					case codes.leftShift, codes.rightShift:
-						shiftPressed = true
-					case codes.keyR:
-						if ctrlPressed && shiftPressed {
-							logger.Info("Global hotkey triggered", "key", "Ctrl+Shift+R")
-							if h.onToggle != nil {
-								h.onToggle()
-							}
-						}
-					}
-				case hook.KeyUp:
-					switch ev.Rawcode {
-					case codes.leftCtrl, codes.rightCtrl:
-						ctrlPressed = false
-					case codes.leftShift, codes.rightShift:
-						shiftPressed = false
-					}
-				}
-			}
-		}
-	}()
-
-	return nil
-}
-
-// IsSupported returns whether global hotkeys are supported on this platform
+// IsSupported returns whether a built-in global hotkey is supported on this
+// platform. When false, the IPC --toggle command bound to a system keybind
+// is the supported alternative.
 func IsSupported() bool {
 	return isSupported()
 }

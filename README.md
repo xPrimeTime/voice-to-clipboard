@@ -73,12 +73,14 @@ Binary will be in `build/bin/voice-to-clipboard`
 
 ### Global Hotkey
 
-**Ctrl+Shift+R** - Toggle recording from anywhere (Windows/X11)
-
-- Works system-wide, even when window is hidden
-- **Windows**: Native global hotkey support
-- **Linux X11**: Global hotkey via robotn/gohook
-- **Linux Wayland**: Use compositor keybinds (see below)
+- **Windows**: **Ctrl+Shift+R** is built in — toggles recording system-wide,
+  even when the window is hidden.
+- **Linux**: there is no built-in global hotkey — bind
+  `voice-to-clipboard --toggle` to a key in your desktop environment instead
+  (one-liner examples below). This is deliberate: a low-level keyboard hook
+  only ever worked on X11, Wayland forbids global key grabbing, and linking
+  the hook library crashed headless/no-XWayland sessions. A system keybind
+  is more reliable on every setup and takes one line of config.
 
 ### Controlling the app (works on any compositor)
 
@@ -101,6 +103,19 @@ bind = SUPER SHIFT, Q,  exec, /path/to/voice-to-clipboard --quit
 bind = SUPER SHIFT, S,  exec, /path/to/voice-to-clipboard --show
 ```
 **Sway** (`~/.config/sway/config`) / **i3** use `bindsym $mod+r exec …` the same way.
+
+**KDE Plasma**: System Settings → Shortcuts → Add New → Command, enter
+`/path/to/voice-to-clipboard --toggle`, assign e.g. **Ctrl+Shift+R**.
+
+**GNOME**: Settings → Keyboard → View and Customize Shortcuts → Custom
+Shortcuts → add the same command and key.
+
+**Any X11 window manager**: use `sxhkd` or `xbindkeys`, e.g. in
+`~/.xbindkeysrc`:
+```
+"/path/to/voice-to-clipboard --toggle"
+  control+shift + r
+```
 
 ### In-App Shortcuts
 
