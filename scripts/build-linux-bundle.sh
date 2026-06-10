@@ -265,20 +265,37 @@ RUNP
 chmod +x "$APP_DIR/run-portable.sh"
 
 cat > "$APP_DIR/THIRD_PARTY_NOTICES.txt" <<'NOTICES'
-This bundle redistributes third-party runtime libraries.
+Voice to Clipboard bundles or links the following third-party software.
+Each component remains under its own license; the URLs lead to source code
+and full license texts.
 
-Primary dependencies:
-- CTranslate2: https://github.com/OpenNMT/CTranslate2
-- go-whisper-ct2 runtime library: https://github.com/xPrimeTime/go-whisper-ct2
-- ONNX Runtime: https://github.com/microsoft/onnxruntime
-- OpenBLAS: https://github.com/OpenMathLib/OpenBLAS
-- GCC runtime libraries (libstdc++, libgcc_s, libgomp, libgfortran,
-  libquadmath): GPL with GCC Runtime Library Exception
-- libsndfile (LGPL-2.1) and its codec libraries: FLAC, libogg, libvorbis,
-  libopus (BSD), mpg123 and LAME/libmp3lame (LGPL)
-- libsamplerate (BSD-2-Clause)
+Bundled native libraries (lib/):
+- go-whisper-ct2 (MIT) - https://github.com/xPrimeTime/go-whisper-ct2
+- CTranslate2 (MIT) - https://github.com/OpenNMT/CTranslate2
+- ONNX Runtime (MIT) - https://github.com/microsoft/onnxruntime
+- OpenBLAS (BSD-3-Clause) - https://github.com/OpenMathLib/OpenBLAS
+- GCC runtime libraries: libstdc++, libgcc_s, libgomp, libgfortran,
+  libquadmath (GPL-3.0 with GCC Runtime Library Exception) -
+  https://www.gnu.org/licenses/gcc-exception-3.1.html
+- libsndfile (LGPL-2.1) - https://github.com/libsndfile/libsndfile
+- libsamplerate (BSD-2-Clause) - https://github.com/libsndfile/libsamplerate
+- FLAC, libogg, libvorbis, libopus (BSD-3-Clause) - https://xiph.org
+- mpg123 (LGPL-2.1) - https://www.mpg123.de
+- LAME / libmp3lame (LGPL-2.0) - https://lame.sourceforge.io
 
-You are responsible for reviewing and complying with each dependency's license terms.
+Compiled into the application binary (Go modules):
+- Gio UI (UNLICENSE or MIT) - https://gioui.org
+- malgo (Unlicense) - https://github.com/gen2brain/malgo
+- oto (Apache-2.0) - https://github.com/ebitengine/oto
+- beeep (BSD-3-Clause) - https://github.com/gen2brain/beeep
+- clipboard (BSD-3-Clause) - https://github.com/atotto/clipboard
+- systray (Apache-2.0) - https://github.com/fyne-io/systray
+
+Bundled model:
+- Silero VAD v6 (MIT) - https://github.com/snakers4/silero-vad
+
+LGPL components are dynamically linked as separate shared libraries in
+lib/ and can be replaced by the user.
 NOTICES
 
 cat > "$APP_DIR/README.md" <<'README'

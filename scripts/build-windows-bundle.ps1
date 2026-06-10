@@ -132,14 +132,34 @@ endlocal
 "@ | Out-File -Encoding ASCII -FilePath (Join-Path $AppDir "run-portable.bat")
 
 @"
-This bundle redistributes third-party runtime libraries.
+Voice to Clipboard bundles or links the following third-party software.
+Each component remains under its own license; the URLs lead to source code
+and full license texts.
 
-Primary dependencies:
-- CTranslate2: https://github.com/OpenNMT/CTranslate2
-- go-whisper-ct2 runtime library: https://github.com/xPrimeTime/go-whisper-ct2
-- oneAPI MKL/OpenMP or equivalent backend libraries (as packaged with CTranslate2)
+Bundled native libraries (DLLs):
+- go-whisper-ct2 (MIT) - https://github.com/xPrimeTime/go-whisper-ct2
+- CTranslate2 (MIT) - https://github.com/OpenNMT/CTranslate2
+- ONNX Runtime (MIT) - https://github.com/microsoft/onnxruntime
+- BLAS/OpenMP backend libraries as packaged with CTranslate2 (e.g.
+  OpenBLAS BSD-3-Clause, oneAPI MKL ISSL, libgomp/vcomp runtimes)
+- If present: libsndfile (LGPL-2.1), libsamplerate (BSD-2-Clause) and
+  codec libraries (FLAC/ogg/vorbis/opus BSD; mpg123/LAME LGPL)
 
-You are responsible for reviewing and complying with each dependency's license terms.
+Compiled into the application binary (Go modules):
+- Gio UI (UNLICENSE or MIT) - https://gioui.org
+- malgo (Unlicense) - https://github.com/gen2brain/malgo
+- oto (Apache-2.0) - https://github.com/ebitengine/oto
+- beeep (BSD-3-Clause) - https://github.com/gen2brain/beeep
+- clipboard (BSD-3-Clause) - https://github.com/atotto/clipboard
+- systray (Apache-2.0) - https://github.com/fyne-io/systray
+- go-winio (MIT) - https://github.com/microsoft/go-winio
+- gohook (MIT) - https://github.com/robotn/gohook
+
+Bundled model:
+- Silero VAD v6 (MIT) - https://github.com/snakers4/silero-vad
+
+LGPL components, where present, are dynamically linked as separate DLLs
+and can be replaced by the user.
 "@ | Out-File -Encoding UTF8 -FilePath (Join-Path $AppDir "THIRD_PARTY_NOTICES.txt")
 
 @"

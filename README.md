@@ -4,20 +4,29 @@ Local voice-to-text transcription with automatic clipboard integration. Go deskt
 
 ## Quick Start
 
-### Download Binary (Easiest)
+### Download Bundle (Easiest)
 
-1. Go to [Releases](https://github.com/yourusername/voice-to-clipboard/releases)
-2. Download for your platform:
-   - **Linux**: `voice-to-clipboard-linux-amd64`
-   - **Windows**: `voice-to-clipboard-windows-amd64.exe`
+1. Go to [Releases](https://github.com/xPrimeTime/voice-to-clipboard/releases)
+2. Download the bundle for your platform — the archive contains the app
+   plus all required speech-recognition runtime libraries:
+   - **Linux**: `voice-to-clipboard-<version>-linux-amd64.tar.gz`
+   - **Windows**: `voice-to-clipboard-<version>-windows-amd64.zip`
 
 3. **Linux**:
    ```bash
-   chmod +x voice-to-clipboard-linux-amd64
-   ./voice-to-clipboard-linux-amd64
+   tar -xzf voice-to-clipboard-*-linux-amd64.tar.gz
+   cd voice-to-clipboard
+   ./run.sh                # or ./run-portable.sh to keep config/cache inside the folder
    ```
 
-4. **Windows**: Double-click `voice-to-clipboard-windows-amd64.exe`
+   System requirements: a recent distro — the bundle's exact glibc floor is
+   listed in its own `README.md` (currently **glibc ≥ 2.43**: Arch, openSUSE
+   Tumbleweed, and similarly current distros). Desktop platform libraries
+   (ALSA, X11/Wayland, EGL) are expected from your distro. On older distros,
+   build from source instead.
+
+4. **Windows**: extract the zip and run `voice-to-clipboard.exe` (or
+   `run-portable.bat` to keep config/cache inside the folder).
 
 5. On first run, if no model is present, the app downloads `base` automatically and shows progress in the UI.
 6. You can switch models later from the tray menu:

@@ -55,12 +55,13 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
    `ubuntu:22.04` (glibc 2.35) fails with symbol-version errors. See the
    glibc note under Known gaps.
 
-3. **Licensing sign-off** (human judgment, not scriptable): confirm
-   redistribution rights for everything the bundle ships — CTranslate2,
-   onnxruntime, OpenBLAS, libgomp/libstdc++/libgcc_s (GCC runtime library
-   exception), and `assets/silero_vad_v6.onnx` — and make sure
-   `THIRD_PARTY_NOTICES.txt` (written by the bundle scripts) reflects the
-   final list.
+3. **Licensing sign-off** — done for v0.1 (2026-06-10): every redistributed
+   component verified as MIT, BSD, Apache-2.0, Unlicense, LGPL (dynamically
+   linked, replaceable .so files), or GPL with the GCC Runtime Library
+   Exception; Silero VAD v6 is MIT. `THIRD_PARTY_NOTICES.txt` (written by
+   the bundle scripts) lists each component with license and URL. Re-check
+   only if the dependency set changes. v0.2 nicety: ship full license texts
+   instead of URLs.
 
 4. **README pass**: point the "Download Binary" quick-start at the actual
    GitHub release URL, and check feature docs are current (drag-to-move,
@@ -75,7 +76,10 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
 
 ## Known gaps (accepted for v0.1, fix later)
 
-- **glibc floor is build-host dependent — currently 2.43 (Arch).** The
+- **glibc floor is build-host dependent — currently 2.43 (Arch). Accepted
+  for v0.1** (2026-06-10): first release ships with the documented floor
+  (stated in the bundle README and the project README); lowering it is a
+  v0.2 goal. The
   native stack (libwhisper_ct2, OpenBLAS, CTranslate2, …) is compiled
   locally, so the bundle only runs on distros at least as new as the build
   host (Arch/tumbleweed-class as of June 2026). The old-distro support that
