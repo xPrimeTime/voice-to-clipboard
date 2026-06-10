@@ -168,6 +168,14 @@ should_bundle_dep() {
       # lets the bundle run there too.
       return 0
       ;;
+    libgfortran.so*|libquadmath.so*|libsndfile.so*|libsamplerate.so*|libFLAC.so*|libogg.so*|libvorbis.so*|libvorbisenc.so*|libvorbisfile.so*|libopus.so*|libmp3lame.so*|libmpg123.so*)
+      # App-stack leakage, not desktop platform libs: libopenblas needs
+      # libgfortran (not installed on stock desktops) and libwhisper_ct2 links
+      # libsndfile/libsamplerate (plus sndfile's codec tree). Desktop platform
+      # libs (X11/wayland/EGL/ALSA/zlib) are deliberately NOT bundled — every
+      # desktop distro ships them and they are coupled to the host.
+      return 0
+      ;;
     *)
       return 1
       ;;
@@ -262,7 +270,13 @@ This bundle redistributes third-party runtime libraries.
 Primary dependencies:
 - CTranslate2: https://github.com/OpenNMT/CTranslate2
 - go-whisper-ct2 runtime library: https://github.com/xPrimeTime/go-whisper-ct2
-- oneAPI MKL/OpenMP or equivalent backend libraries (as packaged with CTranslate2)
+- ONNX Runtime: https://github.com/microsoft/onnxruntime
+- OpenBLAS: https://github.com/OpenMathLib/OpenBLAS
+- GCC runtime libraries (libstdc++, libgcc_s, libgomp, libgfortran,
+  libquadmath): GPL with GCC Runtime Library Exception
+- libsndfile (LGPL-2.1) and its codec libraries: FLAC, libogg, libvorbis,
+  libopus (BSD), mpg123 and LAME/libmp3lame (LGPL)
+- libsamplerate (BSD-2-Clause)
 
 You are responsible for reviewing and complying with each dependency's license terms.
 NOTICES
@@ -291,6 +305,29 @@ if grep -q "not found" "$VERIFY_LOG"; then
   grep "not found" "$VERIFY_LOG" >&2
   exit 1
 fi
+
+# Measure the real glibc floor of the bundle: the max GLIBC_x.y symbol version
+# referenced by the binary or any bundled lib. Libs built on a rolling-release
+# host silently raise this (e.g. libwhisper_ct2 built on Arch needs 2.43 while
+# Ubuntu 22.04 ships 2.35) — report it so the supported-distros claim is honest.
+GLIBC_FLOOR="$(
+  {
+    objdump -T "$BIN_PATH"
+    for so in "$LIB_DIR"/*.so*; do
+      [[ -f "$so" && ! -L "$so" ]] && objdump -T "$so"
+    done
+  } 2>/dev/null | grep -o 'GLIBC_2\.[0-9]*' | sed 's/GLIBC_//' | sort -Vu | tail -1
+)"
+echo "  glibc floor: ${GLIBC_FLOOR:-unknown} (host distros need glibc >= this)"
+{
+  echo ""
+  echo "## System requirements"
+  echo "- glibc >= ${GLIBC_FLOOR:-unknown} (build-host dependent; rebuild the native"
+  echo "  stack on an older base image to lower it)"
+  echo '- Desktop platform libraries (preinstalled on any desktop distro):'
+  echo '  ALSA (libasound2 / alsa-lib), X11 (libX11, libXtst, libxcb, libXcursor,'
+  echo '  libXfixes, xkbcommon), EGL (libegl1 / mesa), Wayland client libs, zlib.'
+} >> "$APP_DIR/README.md"
 
 echo "[6/6] Creating archive + checksum"
 tar -C "$STAGE_ROOT" -czf "$ARCHIVE_PATH" "voice-to-clipboard"

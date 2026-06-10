@@ -28,17 +28,27 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
    around may predate recent commits — check `tar -xzf`'d binary with
    `--version` and rebuild if in doubt.
 
-2. **Clean-machine library check** (needs sudo for docker):
+2. **Clean-machine library check** (needs sudo for docker). The bundle
+   deliberately does NOT ship desktop platform libs (ALSA, X11, Wayland, EGL,
+   zlib — every desktop distro has them), so install those in the container
+   first; everything else must resolve from the bundle's `lib/`:
 
    ```bash
    tar -xzf dist/voice-to-clipboard-0.1.0-linux-amd64.tar.gz -C /tmp
-   sudo docker run --rm -v /tmp/voice-to-clipboard:/app:ro \
-       ubuntu:22.04 /app/voice-to-clipboard --quit
+   sudo docker run --rm -v /tmp/voice-to-clipboard:/app:ro archlinux:latest \
+       bash -c "pacman -Sy --noconfirm alsa-lib libx11 libxtst libxcb \
+                libxkbcommon libxkbcommon-x11 libxcursor libxfixes libglvnd \
+                wayland zlib >/dev/null && /app/voice-to-clipboard --quit"
    ```
 
-   `"No running instance found"` means every bundled lib loaded on a stock
-   old-glibc distro — pass. (GUI/audio/tray can only be fully tested on a real
-   desktop, not a container.)
+   `"No running instance found"` = every library loaded — pass. (GUI/audio/
+   tray can only be fully tested on a real desktop, not a container.)
+
+   The container must satisfy the bundle's **glibc floor**, which the build
+   script measures and prints (and writes into the bundle's README). Built on
+   this Arch host the floor is glibc 2.43, hence the `archlinux` image —
+   `ubuntu:22.04` (glibc 2.35) fails with symbol-version errors. See the
+   glibc note under Known gaps.
 
 3. **Licensing sign-off** (human judgment, not scriptable): confirm
    redistribution rights for everything the bundle ships — CTranslate2,
@@ -60,6 +70,15 @@ symbols, and on Windows build with `-H=windowsgui` so no console window opens.
 
 ## Known gaps (accepted for v0.1, fix later)
 
+- **glibc floor is build-host dependent — currently 2.43 (Arch).** The
+  native stack (libwhisper_ct2, OpenBLAS, CTranslate2, …) is compiled
+  locally, so the bundle only runs on distros at least as new as the build
+  host (Arch/tumbleweed-class as of June 2026). The old-distro support that
+  bundling libstdc++ was meant to buy (Ubuntu 22.04/Debian 12) does NOT
+  currently hold — that check only covered GLIBCXX, not glibc itself. To
+  lower the floor, rebuild the native stack (go-whisper-ct2 repo) inside an
+  old base image (e.g. ubuntu:22.04) and build the bundle from those libs;
+  the bundle script measures and reports the floor on every build.
 - **No model checksum verification** — `config.ModelInfo.Checksum` is always
   `""` and never checked; downloads are trusted from HuggingFace over HTTPS.
 - **Test coverage** — only `internal/config` has tests (a race test for model
